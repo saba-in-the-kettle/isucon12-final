@@ -1614,8 +1614,9 @@ func (h *Handler) listPresent(c echo.Context) error {
 		return errorResponse(c, http.StatusInternalServerError, err)
 	}
 
-	isNext := len(presentList) > PresentCountPerPage
-	if len(presentList) > 0 {
+	isNext := false
+	if len(presentList) > PresentCountPerPage {
+		isNext = true
 		presentList = presentList[:len(presentList)-1]
 	}
 
