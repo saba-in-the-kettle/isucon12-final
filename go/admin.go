@@ -6,6 +6,7 @@ import (
 	"encoding/csv"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/jmoiron/sqlx"
@@ -286,6 +287,17 @@ func (h *Handler) adminUpdateMasterImpl(c echo.Context, tx *sqlx.Tx) error {
 				"status":         v[1],
 				"master_version": v[2],
 			})
+
+			// activeなら
+			if v[1] == "1" {
+				// TODO: アプリケーションサーバー分散させるならそっちにも投げる
+				id, _ := strconv.ParseInt(v[0], 10, 64)
+				versionMasterCache.Set(versionMasterKey, VersionMaster{
+					ID:            id,
+					Status:        1,
+					MasterVersion: v[2],
+				})
+			}
 		}
 
 		query := "INSERT INTO version_masters(id, status, master_version) VALUES (:id, :status, :master_version) ON DUPLICATE KEY UPDATE status=VALUES(status), master_version=VALUES(master_version)"

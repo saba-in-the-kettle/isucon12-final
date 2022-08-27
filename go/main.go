@@ -58,7 +58,12 @@ type Handler struct {
 	db2 *sqlx.DB
 }
 
+func bothInit() {
+	versionMasterCache.Flush()
+}
+
 func main() {
+	bothInit()
 	rand.Seed(time.Now().UnixNano())
 	time.Local = time.FixedZone("Local", 9*60*60)
 
@@ -178,6 +183,10 @@ func (h *Handler) adminMiddleware(next echo.HandlerFunc) echo.HandlerFunc {
 	}
 }
 
+var versionMasterCache = NewCache[VersionMaster]()
+
+const versionMasterKey = "versionMaster"
+
 // apiMiddleware
 func (h *Handler) apiMiddleware(next echo.HandlerFunc) echo.HandlerFunc {
 	return func(c echo.Context) error {
@@ -188,13 +197,17 @@ func (h *Handler) apiMiddleware(next echo.HandlerFunc) echo.HandlerFunc {
 		c.Set("requestTime", requestAt.Unix())
 
 		// マスタ確認
-		query := "SELECT * FROM version_masters WHERE status=1"
 		masterVersion := new(VersionMaster)
-		if err := h.db.Get(masterVersion, query); err != nil {
-			if err == sql.ErrNoRows {
-				return errorResponse(c, http.StatusNotFound, fmt.Errorf("active master version is not found"))
+		if mv, ok := versionMasterCache.Get(versionMasterKey); !ok {
+			query := "SELECT * FROM version_masters WHERE status=1"
+			if err := h.db.Get(masterVersion, query); err != nil {
+				if err == sql.ErrNoRows {
+					return errorResponse(c, http.StatusNotFound, fmt.Errorf("active master version is not found"))
+				}
+				return errorResponse(c, http.StatusInternalServerError, err)
 			}
-			return errorResponse(c, http.StatusInternalServerError, err)
+		} else {
+			masterVersion = &mv
 		}
 
 		if masterVersion.MasterVersion != c.Request().Header.Get("x-master-version") {
@@ -892,6 +905,7 @@ func (h *Handler) obtainItemCoins(tx *sqlx.Tx, userID int64, obtainAmount int64)
 // POST /initialize
 func initialize(c echo.Context) error {
 	c.Logger().Error("initializing....")
+	bothInit()
 	dbx, err := connectDB(1, true)
 	if err != nil {
 		return errorResponse(c, http.StatusInternalServerError, err)
@@ -1632,7 +1646,7 @@ func (h *Handler) receivePresent(c echo.Context) error {
 		updateArgs = append(updateArgs, p.ItemID)
 		updateArgs = append(updateArgs, p.Amount)
 		updateArgs = append(updateArgs, p.PresentMessage)
-		updateArgs = append(updateArgs, requestAt)
+		updateArgs = append(updateArgs, p.CreatedAt)
 		updateArgs = append(updateArgs, requestAt)
 		updateArgs = append(updateArgs, requestAt)
 	}
