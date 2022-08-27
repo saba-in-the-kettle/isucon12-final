@@ -60,6 +60,7 @@ type Handler struct {
 
 func bothInit() {
 	versionMasterCache.Flush()
+	banCache.Flush()
 }
 
 func main() {
@@ -324,16 +325,24 @@ func (h *Handler) checkViewerID(userID int64, viewerID string) error {
 	return nil
 }
 
+var banCache = NewCache[bool]()
+
 // checkBan
 func (h *Handler) checkBan(userID int64) (bool, error) {
+	banned, ok := banCache.Get(strconv.FormatInt(userID, 10))
+	if ok {
+		return banned, nil
+	}
 	var got int
 	query := "SELECT 1 FROM user_bans WHERE user_id=?"
 	if err := h.getDB(userID).Get(&got, query, userID); err != nil {
 		if err == sql.ErrNoRows {
+			banCache.Set(strconv.FormatInt(userID, 10), false)
 			return false, nil
 		}
 		return false, err
 	}
+	banCache.Set(strconv.FormatInt(userID, 10), true)
 	return true, nil
 }
 
