@@ -47,7 +47,7 @@ deploy-sql:
 
 .PHONY: deploy-config
 deploy-config:
-	@ for s in s1 s2 s3; do\
+	@ for s in s1 s2 s3 s4 s5; do\
 		$(START_ECHO);\
 		cd $$s && ./deploy.sh && cd -;\
 	done
