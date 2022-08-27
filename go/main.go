@@ -911,7 +911,10 @@ func initialize(c echo.Context) error {
 		for _, ip := range []string{"133.152.6.154", "133.152.6.155"} {
 			ip := ip
 			eg.Go(func() error {
-				_, err = http.DefaultClient.Post(fmt.Sprintf("http://%s:80/initialize", ip), "", nil)
+				resp, err := http.DefaultClient.Post(fmt.Sprintf("http://%s:80/initialize", ip), "", nil)
+				if resp.StatusCode != 200 {
+					return fmt.Errorf("status code is not 200: %d", resp.StatusCode)
+				}
 				return err
 			})
 		}
