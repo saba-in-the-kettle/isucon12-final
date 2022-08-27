@@ -1590,7 +1590,7 @@ func (h *Handler) receivePresent(c echo.Context) error {
 		updateArgs = append(updateArgs, p.ItemID)
 		updateArgs = append(updateArgs, p.Amount)
 		updateArgs = append(updateArgs, p.PresentMessage)
-		updateArgs = append(updateArgs, requestAt)
+		updateArgs = append(updateArgs, p.CreatedAt)
 		updateArgs = append(updateArgs, requestAt)
 		updateArgs = append(updateArgs, requestAt)
 	}
