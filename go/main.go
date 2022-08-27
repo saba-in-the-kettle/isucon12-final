@@ -2006,7 +2006,7 @@ func (h *Handler) getDBFromSessIDOrToken(sessID string) *sqlx.DB {
 // generateID uniqueなIDを生成する
 func (h *Handler) generateID() (int64, error) {
 	newId := atomic.AddInt64(&uniqueIdCount, 1)
-	return uniqueIdBase + newId*1000000, nil
+	return uniqueIdBase + newId*100000000000, nil
 }
 
 func (h *Handler) generateUserID() (int64, error) {
