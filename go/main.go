@@ -450,18 +450,39 @@ func (h *Handler) obtainPresent(tx *sqlx.Tx, userID int64, requestAt int64) ([]*
 		return nil, err
 	}
 
-	// 全員プレゼント取得情報更新
 	obtainPresents := make([]*UserPresent, 0)
-	for _, np := range normalPresents {
-		received := new(UserPresentAllReceivedHistory)
-		query = "SELECT * FROM user_present_all_received_history WHERE user_id=? AND present_all_id=?"
-		err := tx.Get(received, query, userID, np.ID)
-		if err == nil {
-			// プレゼント配布済
-			continue
+
+	presentIDToReceived := make(map[int64]*UserPresentAllReceivedHistory)
+	{
+		normalPresentIDs := make([]int64, 0, len(normalPresents))
+		for _, np := range normalPresents {
+			normalPresentIDs = append(normalPresentIDs, np.ID)
 		}
-		if err != sql.ErrNoRows {
+
+		query, args, err := sqlx.In("SELECT * FROM user_present_all_received_history WHERE user_id=? AND present_all_id IN (?)", userID, normalPresentIDs)
+		if err != nil {
 			return nil, err
+		}
+		received := make([]*UserPresentAllReceivedHistory, 0)
+		err = tx.Select(&received, query, args...)
+		if err != nil {
+			if err != sql.ErrNoRows {
+				return nil, err
+			}
+			log.Println(err)
+			return obtainPresents, nil
+		}
+
+		for _, r := range received {
+			presentIDToReceived[r.PresentAllID] = r
+		}
+	}
+
+	// 全員プレゼント取得情報更新
+	// TODO: N+1
+	for _, np := range normalPresents {
+		if _, ok := presentIDToReceived[np.ID]; ok {
+			continue
 		}
 
 		// user present boxに入れる
@@ -636,16 +657,25 @@ func initialize(c echo.Context) error {
 	}
 	defer dbx.Close()
 
-	out, err := exec.Command("/bin/sh", "-c", SQLDirectory+"init.sh").CombinedOutput()
-	if err != nil {
-		c.Logger().Errorf("Failed to initialize %s: %v", string(out), err)
-		return errorResponse(c, http.StatusInternalServerError, err)
-	}
-	_, err = http.DefaultClient.Get("http://133.152.6.153:9000/api/group/collect")
-	if err != nil {
-		return fmt.Errorf("initialize collect: %w", err)
-	}
+	var isS1 = os.Getenv("ISUCON_SERVER") == "s1"
 
+	if isS1 {
+		_, err = http.DefaultClient.Post("http://133.152.6.154:8080/initialize", "", nil)
+		if err != nil {
+			return fmt.Errorf("initialize collect: %w", err)
+		}
+	} else {
+		out, err := exec.Command("/bin/sh", "-c", SQLDirectory+"init.sh").CombinedOutput()
+		if err != nil {
+			c.Logger().Errorf("Failed to initialize %s: %v", string(out), err)
+			return errorResponse(c, http.StatusInternalServerError, err)
+		}
+
+		_, err = http.DefaultClient.Get("http://133.152.6.153:9000/api/group/collect")
+		if err != nil {
+			return fmt.Errorf("initialize collect: %w", err)
+		}
+	}
 	return successResponse(c, &InitializeResponse{
 		Language: "go",
 	})
