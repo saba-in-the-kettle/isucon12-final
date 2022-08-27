@@ -23,6 +23,7 @@ import (
 	"github.com/kaz/pprotein/integration/echov4"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
+	gommonlog "github.com/labstack/gommon/log"
 	"github.com/pkg/errors"
 	"golang.org/x/sync/errgroup"
 )
@@ -77,6 +78,8 @@ func main() {
 	// e.Use(middleware.Logger())
 	e.Use(middleware.Recover())
 	echov4.EnableDebugHandler(e)
+
+	e.Logger.SetLevel(gommonlog.OFF)
 	e.Use(middleware.CORSWithConfig(middleware.CORSConfig{
 		AllowOrigins: []string{"*"},
 		AllowMethods: []string{http.MethodGet, http.MethodPost},
@@ -190,6 +193,10 @@ func connectDB(dbIdx int, batch bool) (*sqlx.DB, error) {
 		log.Print(err)
 		time.Sleep(1 * time.Second)
 	}
+
+	dbx.SetMaxOpenConns(200)
+	dbx.SetMaxIdleConns(200)
+
 	return dbx, nil
 }
 
@@ -1337,7 +1344,7 @@ func (h *Handler) listGacha(c echo.Context) error {
 
 	db := h.getDB(userID)
 	gachaMasterList := []*GachaMaster{}
-	query := "SELECT * FROM gacha_masters WHERE start_at <= ? AND end_at >= ? ORDER BY display_order ASC"
+	query := "SELECT * FROM gacha_masters FORCE INDEX (gacha_masters_start_at_end_at_display_order_index) WHERE start_at <= ? AND end_at >= ? ORDER BY display_order ASC"
 	err = db.Select(&gachaMasterList, query, requestAt, requestAt)
 	if err != nil {
 		return errorResponse(c, http.StatusInternalServerError, err)
@@ -1645,8 +1652,9 @@ func (h *Handler) listPresent(c echo.Context) error {
 	}
 
 	isNext := false
-	if presentCount > (offset + PresentCountPerPage) {
+	if len(presentList) > PresentCountPerPage {
 		isNext = true
+		presentList = presentList[:len(presentList)-1]
 	}
 
 	return successResponse(c, &ListPresentResponse{

@@ -11,15 +11,15 @@ truncate -s 0 /var/log/nginx/access.log
 
 set -e
 sudo systemctl restart nginx
-sudo systemctl restart mysql
-
-QUERY="CREATE USER IF NOT EXISTS 'isucon'@'%' identified by 'isucon';
-GRANT ALL privileges on *.* to isucon@'%';
-ALTER USER isucon@'%' IDENTIFIED WITH mysql_native_password BY 'isucon';
-flush privileges;
-"
-
-echo "$QUERY" | sudo mysql -uroot
+sudo systemctl disable --now mysql
+#
+#QUERY="CREATE USER IF NOT EXISTS 'isucon'@'%' identified by 'isucon';
+#GRANT ALL privileges on *.* to isucon@'%';
+#ALTER USER isucon@'%' IDENTIFIED WITH mysql_native_password BY 'isucon';
+#flush privileges;
+#"
+#
+#echo "$QUERY" | sudo mysql -uroot
 
 sudo ufw disable
 sudo service apparmor stop
