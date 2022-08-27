@@ -997,11 +997,6 @@ func initialize(c echo.Context) error {
 		if err != nil {
 			return fmt.Errorf("initialize collect: %w", err)
 		}
-
-		_, err = http.DefaultClient.Get("http://133.152.6.153:9000/api/group/collect")
-		if err != nil {
-			return fmt.Errorf("initialize collect: %w", err)
-		}
 	} else {
 		out, err := exec.Command("/bin/sh", "-c", SQLDirectory+"init.sh").CombinedOutput()
 		if err != nil {

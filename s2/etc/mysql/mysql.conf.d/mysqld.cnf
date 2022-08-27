@@ -12,9 +12,7 @@
 # The following values assume you have at least 32M ram
 
 [mysqld]
-slow_query_log=ON
-long_query_time=0
-slow_query_log_file = /var/log/mysql/mysql-slow.log
+slow_query_log=OFF
 
 disable_log_bin
 max_connections=10000
