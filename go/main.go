@@ -632,7 +632,7 @@ func initialize(c echo.Context) error {
 		return errorResponse(c, http.StatusInternalServerError, err)
 	}
 
-	_, err = http.DefaultClient.Get("http://133.152.6.153/:9000/api/group/collect")
+	_, err = http.DefaultClient.Get("http://133.152.6.153:9000/api/group/collect")
 	if err != nil {
 		return fmt.Errorf("initialize collect: %w", err)
 	}
