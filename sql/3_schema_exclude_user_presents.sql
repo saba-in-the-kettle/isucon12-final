@@ -262,6 +262,9 @@ CREATE TABLE `user_one_time_tokens` (
   UNIQUE uniq_token (`user_id`, `token`, `deleted_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
+create index user_one_time_tokens_token_token_type_deleted_at
+    on user_one_time_tokens (token, token_type, deleted_at);
+
 /* 管理者権限のセッション管理 */
 CREATE TABLE `admin_sessions` (
   `id` bigint NOT NULL,
