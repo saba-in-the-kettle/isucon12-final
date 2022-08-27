@@ -513,13 +513,13 @@ func (h *Handler) obtainPresent(tx *sqlx.Tx, userID int64, requestAt int64) ([]*
 			count += 1
 		}
 
-		query = "INSERT INTO user_presents(id, user_id, sent_at, item_type, item_id, amount, present_message, created_at, updated_at) VALUES " + createBulkInsertPlaceholder(count)
-		if _, err := tx.Exec(query, args...); err != nil {
-			return nil, err
+		if count >= 1 {
+			query = "INSERT INTO user_presents(id, user_id, sent_at, item_type, item_id, amount, present_message, created_at, updated_at) VALUES " + createBulkInsertPlaceholder(count)
+			if _, err := tx.Exec(query, args...); err != nil {
+				return nil, err
+			}
 		}
 	}
-
-	// 全員プレゼント取得情報更新
 	// TODO: N+1
 	for _, np := range normalPresents {
 		if _, ok := presentIDToReceived[np.ID]; ok {
