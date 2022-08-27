@@ -149,6 +149,10 @@ CREATE TABLE `user_presents` (
   INDEX userid_idx (`user_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
+create index user_presents_user_id_deleted_at_created_at_id_index
+    on user_presents (user_id asc, deleted_at asc, created_at desc, id asc);
+
+
 /* ガチャマスタ */
 
 CREATE TABLE `gacha_masters` (

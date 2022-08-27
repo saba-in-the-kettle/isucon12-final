@@ -641,7 +641,6 @@ func initialize(c echo.Context) error {
 		c.Logger().Errorf("Failed to initialize %s: %v", string(out), err)
 		return errorResponse(c, http.StatusInternalServerError, err)
 	}
-
 	_, err = http.DefaultClient.Get("http://133.152.6.153:9000/api/group/collect")
 	if err != nil {
 		return fmt.Errorf("initialize collect: %w", err)
@@ -1328,6 +1327,7 @@ func (h *Handler) receivePresent(c echo.Context) error {
 			return errorResponse(c, http.StatusInternalServerError, err)
 		}
 
+		// TODO(p1ass): この処理何？
 		_, _, _, err = h.obtainItem(tx, v.UserID, v.ItemID, v.ItemType, int64(v.Amount), requestAt)
 		if err != nil {
 			if err == ErrUserNotFound || err == ErrItemNotFound {
