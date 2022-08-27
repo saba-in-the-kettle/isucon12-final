@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/exec"
 	"strconv"
+	"strings"
 	"sync/atomic"
 	"time"
 
@@ -482,61 +483,91 @@ func (h *Handler) obtainPresent(tx *sqlx.Tx, userID int64, requestAt int64) ([]*
 		}
 	}
 
-	// 全員プレゼント取得情報更新
-	// TODO: N+1
-	for _, np := range normalPresents {
-		if _, ok := presentIDToReceived[np.ID]; ok {
-			continue
+	// user present boxに入れる
+	{
+		createBulkInsertPlaceholder := func(sliceLen int) string {
+			return strings.Repeat("(?, ?, ?, ?, ?, ?, ?, ?, ?),\n", sliceLen-1) + "(?, ?, ?, ?, ?, ?, ?, ?, ?)"
 		}
 
-		// user present boxに入れる
-		pID, err := h.generateID()
-		if err != nil {
-			return nil, err
-		}
-		up := &UserPresent{
-			ID:             pID,
-			UserID:         userID,
-			SentAt:         requestAt,
-			ItemType:       np.ItemType,
-			ItemID:         np.ItemID,
-			Amount:         int(np.Amount),
-			PresentMessage: np.PresentMessage,
-			CreatedAt:      requestAt,
-			UpdatedAt:      requestAt,
-		}
-		query = "INSERT INTO user_presents(id, user_id, sent_at, item_type, item_id, amount, present_message, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
-		if _, err := tx.Exec(query, up.ID, up.UserID, up.SentAt, up.ItemType, up.ItemID, up.Amount, up.PresentMessage, up.CreatedAt, up.UpdatedAt); err != nil {
-			return nil, err
+		var args []interface{}
+		count := 0
+		for _, np := range normalPresents {
+			if _, ok := presentIDToReceived[np.ID]; ok {
+				continue
+			}
+			pID, err := h.generateID()
+			if err != nil {
+				return nil, err
+			}
+			up := &UserPresent{
+				ID:             pID,
+				UserID:         userID,
+				SentAt:         requestAt,
+				ItemType:       np.ItemType,
+				ItemID:         np.ItemID,
+				Amount:         int(np.Amount),
+				PresentMessage: np.PresentMessage,
+				CreatedAt:      requestAt,
+				UpdatedAt:      requestAt,
+			}
+
+			obtainPresents = append(obtainPresents, up)
+
+			args = append(args, up.ID, up.UserID, up.SentAt, up.ItemType, up.ItemID, up.Amount, up.PresentMessage, up.CreatedAt, up.UpdatedAt)
+			count += 1
 		}
 
-		// historyに入れる
-		phID, err := h.generateID()
-		if err != nil {
-			return nil, err
+		if count >= 1 {
+			query = "INSERT INTO user_presents(id, user_id, sent_at, item_type, item_id, amount, present_message, created_at, updated_at) VALUES " + createBulkInsertPlaceholder(count)
+			if _, err := tx.Exec(query, args...); err != nil {
+				return nil, err
+			}
 		}
-		history := &UserPresentAllReceivedHistory{
-			ID:           phID,
-			UserID:       userID,
-			PresentAllID: np.ID,
-			ReceivedAt:   requestAt,
-			CreatedAt:    requestAt,
-			UpdatedAt:    requestAt,
-		}
-		query = "INSERT INTO user_present_all_received_history(id, user_id, present_all_id, received_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)"
-		if _, err := tx.Exec(
-			query,
-			history.ID,
-			history.UserID,
-			history.PresentAllID,
-			history.ReceivedAt,
-			history.CreatedAt,
-			history.UpdatedAt,
-		); err != nil {
-			return nil, err
+	}
+
+	{
+		createBulkInsertPlaceholder := func(sliceLen int) string {
+			return strings.Repeat("(?, ?, ?, ?, ?, ?),\n", sliceLen-1) + "(?, ?, ?, ?, ?, ?)"
 		}
 
-		obtainPresents = append(obtainPresents, up)
+		var args []interface{}
+		count := 0
+		for _, np := range normalPresents {
+			if _, ok := presentIDToReceived[np.ID]; ok {
+				continue
+			}
+
+			// historyに入れる
+			phID, err := h.generateID()
+			if err != nil {
+				return nil, err
+			}
+			history := &UserPresentAllReceivedHistory{
+				ID:           phID,
+				UserID:       userID,
+				PresentAllID: np.ID,
+				ReceivedAt:   requestAt,
+				CreatedAt:    requestAt,
+				UpdatedAt:    requestAt,
+			}
+			args = append(args, history.ID,
+				history.UserID,
+				history.PresentAllID,
+				history.ReceivedAt,
+				history.CreatedAt,
+				history.UpdatedAt)
+			count += 1
+		}
+
+		if count >= 1 {
+			query = "INSERT INTO user_present_all_received_history(id, user_id, present_all_id, received_at, created_at, updated_at) VALUES " + createBulkInsertPlaceholder(count)
+			if _, err := tx.Exec(
+				query,
+				args...,
+			); err != nil {
+				return nil, err
+			}
+		}
 	}
 
 	return obtainPresents, nil
@@ -710,16 +741,15 @@ func initialize(c echo.Context) error {
 		if err != nil {
 			return fmt.Errorf("initialize collect: %w", err)
 		}
+		_, err = http.DefaultClient.Get("http://133.152.6.153:9000/api/group/collect")
+		if err != nil {
+			return fmt.Errorf("initialize collect: %w", err)
+		}
 	} else {
 		out, err := exec.Command("/bin/sh", "-c", SQLDirectory+"init.sh").CombinedOutput()
 		if err != nil {
 			c.Logger().Errorf("Failed to initialize %s: %v", string(out), err)
 			return errorResponse(c, http.StatusInternalServerError, err)
-		}
-
-		_, err = http.DefaultClient.Get("http://133.152.6.153:9000/api/group/collect")
-		if err != nil {
-			return fmt.Errorf("initialize collect: %w", err)
 		}
 	}
 	return successResponse(c, &InitializeResponse{
