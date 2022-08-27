@@ -16,8 +16,6 @@ slow_query_log=ON
 long_query_time=0
 slow_query_log_file = /var/log/mysql/mysql-slow.log
 
-
-[mysqld]
 disable_log_bin
 max_connections=10000
 innodb_buffer_pool_size = 3G # メモリの75%程度を指定
