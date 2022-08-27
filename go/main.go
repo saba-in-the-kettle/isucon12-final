@@ -1343,7 +1343,7 @@ func (h *Handler) drawGacha(c echo.Context) error {
 
 	consumedCoin := int64(gachaCount * 1000)
 
-	// userのisuconが足りるか
+	// userのisucoinが足りるか
 	user := new(User)
 	query := "SELECT * FROM users WHERE id=?"
 	if err := h.DB.Get(user, query, userID); err != nil {
@@ -1408,28 +1408,41 @@ func (h *Handler) drawGacha(c echo.Context) error {
 
 	// 直付与 => プレゼントに入れる
 	presents := make([]*UserPresent, 0, gachaCount)
-	for _, v := range result {
-		pID, err := h.generateID()
-		if err != nil {
-			return errorResponse(c, http.StatusInternalServerError, err)
-		}
-		present := &UserPresent{
-			ID:             pID,
-			UserID:         userID,
-			SentAt:         requestAt,
-			ItemType:       v.ItemType,
-			ItemID:         v.ItemID,
-			Amount:         v.Amount,
-			PresentMessage: fmt.Sprintf("%sの付与アイテムです", gachaInfo.Name),
-			CreatedAt:      requestAt,
-			UpdatedAt:      requestAt,
-		}
-		query = "INSERT INTO user_presents(id, user_id, sent_at, item_type, item_id, amount, present_message, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
-		if _, err := tx.Exec(query, present.ID, present.UserID, present.SentAt, present.ItemType, present.ItemID, present.Amount, present.PresentMessage, present.CreatedAt, present.UpdatedAt); err != nil {
-			return errorResponse(c, http.StatusInternalServerError, err)
+
+	{
+		createBulkInsertPlaceholder := func(sliceLen int) string {
+			return strings.Repeat("(?, ?, ?, ?, ?, ?, ?, ?, ?),\n", sliceLen-1) + "(?, ?, ?, ?, ?, ?, ?, ?, ?)"
 		}
 
-		presents = append(presents, present)
+		var args []interface{}
+		count := 0
+		for _, v := range result {
+			pID, err := h.generateID()
+			if err != nil {
+				return errorResponse(c, http.StatusInternalServerError, err)
+			}
+			present := &UserPresent{
+				ID:             pID,
+				UserID:         userID,
+				SentAt:         requestAt,
+				ItemType:       v.ItemType,
+				ItemID:         v.ItemID,
+				Amount:         v.Amount,
+				PresentMessage: fmt.Sprintf("%sの付与アイテムです", gachaInfo.Name),
+				CreatedAt:      requestAt,
+				UpdatedAt:      requestAt,
+			}
+			args = append(args, present.ID, present.UserID, present.SentAt, present.ItemType, present.ItemID, present.Amount, present.PresentMessage, present.CreatedAt, present.UpdatedAt)
+			count += 1
+			presents = append(presents, present)
+		}
+
+		if count >= 1 {
+			query = "INSERT INTO user_presents(id, user_id, sent_at, item_type, item_id, amount, present_message, created_at, updated_at) VALUES " + createBulkInsertPlaceholder(count)
+			if _, err := tx.Exec(query, args...); err != nil {
+				return errorResponse(c, http.StatusInternalServerError, err)
+			}
+		}
 	}
 
 	// isuconをへらす
