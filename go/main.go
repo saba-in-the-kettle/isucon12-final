@@ -63,6 +63,7 @@ type Handler struct {
 
 func bothInit() {
 	versionMasterCache.Flush()
+	userSessionsCache.Flush()
 	banCache.Flush()
 }
 
@@ -228,6 +229,8 @@ func (h *Handler) apiMiddleware(next echo.HandlerFunc) echo.HandlerFunc {
 				}
 				return errorResponse(c, http.StatusInternalServerError, err)
 			}
+
+			versionMasterCache.Set(versionMasterKey, *masterVersion)
 		} else {
 			masterVersion = &mv
 		}
@@ -256,6 +259,8 @@ func (h *Handler) apiMiddleware(next echo.HandlerFunc) echo.HandlerFunc {
 	}
 }
 
+var userSessionsCache = NewCache[Session]() // key: userId
+
 // checkSessionMiddleware
 func (h *Handler) checkSessionMiddleware(next echo.HandlerFunc) echo.HandlerFunc {
 	return func(c echo.Context) error {
@@ -275,20 +280,25 @@ func (h *Handler) checkSessionMiddleware(next echo.HandlerFunc) echo.HandlerFunc
 		}
 
 		userSession := new(Session)
-		query := "SELECT * FROM user_sessions WHERE session_id=? AND deleted_at IS NULL"
-		if err := h.getDBFromSessIDOrToken(sessID).Get(userSession, query, sessID); err != nil {
-			if err == sql.ErrNoRows {
-				return errorResponse(c, http.StatusUnauthorized, ErrUnauthorized)
+		if s, ok := userSessionsCache.Get(strconv.FormatInt(userID, 10)); ok && s.SessionID == sessID {
+			userSession = &s
+		} else {
+			query := "SELECT * FROM user_sessions WHERE session_id=? AND deleted_at IS NULL"
+			if err := h.getDBFromSessIDOrToken(sessID).Get(userSession, query, sessID); err != nil {
+				if err == sql.ErrNoRows {
+					return errorResponse(c, http.StatusUnauthorized, ErrUnauthorized)
+				}
+				return errorResponse(c, http.StatusInternalServerError, err)
 			}
-			return errorResponse(c, http.StatusInternalServerError, err)
-		}
-
-		if userSession.UserID != userID {
-			return errorResponse(c, http.StatusForbidden, ErrForbidden)
+			userSessionsCache.Set(strconv.FormatInt(userID, 10), *userSession)
+			if userSession.UserID != userID {
+				return errorResponse(c, http.StatusForbidden, ErrForbidden)
+			}
 		}
 
 		if userSession.ExpiredAt < requestAt {
-			query = "UPDATE user_sessions SET deleted_at=? WHERE session_id=?"
+			userSessionsCache.cache.Delete(strconv.FormatInt(userID, 10))
+			query := "UPDATE user_sessions SET deleted_at=? WHERE session_id=?"
 			if _, err = h.getDBFromSessIDOrToken(sessID).Exec(query, requestAt, sessID); err != nil {
 				return errorResponse(c, http.StatusInternalServerError, err)
 			}
@@ -1148,6 +1158,7 @@ func (h *Handler) createUser(c echo.Context) error {
 	if _, err = tx.Exec(query, sess.ID, sess.UserID, sess.SessionID, sess.CreatedAt, sess.UpdatedAt, sess.ExpiredAt); err != nil {
 		return errorResponse(c, http.StatusInternalServerError, err)
 	}
+	userSessionsCache.Set(strconv.FormatInt(sess.UserID, 10), *sess)
 
 	err = tx.Commit()
 	if err != nil {
@@ -1224,6 +1235,7 @@ func (h *Handler) login(c echo.Context) error {
 	defer tx.Rollback() //nolint:errcheck
 
 	// sessionを更新
+	userSessionsCache.cache.Delete(strconv.FormatInt(req.UserID, 10))
 	query = "UPDATE user_sessions SET deleted_at=? WHERE user_id=? AND deleted_at IS NULL"
 	if _, err = tx.Exec(query, requestAt, req.UserID); err != nil {
 		return errorResponse(c, http.StatusInternalServerError, err)
@@ -1248,6 +1260,7 @@ func (h *Handler) login(c echo.Context) error {
 	if _, err = tx.Exec(query, sess.ID, sess.UserID, sess.SessionID, sess.CreatedAt, sess.UpdatedAt, sess.ExpiredAt); err != nil {
 		return errorResponse(c, http.StatusInternalServerError, err)
 	}
+	userSessionsCache.Set(strconv.FormatInt(sess.UserID, 10), *sess)
 
 	// すでにログインしているユーザはログイン処理をしない
 	if isCompleteTodayLogin(time.Unix(user.LastActivatedAt, 0), time.Unix(requestAt, 0)) {
