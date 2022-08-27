@@ -823,6 +823,9 @@ func (h *Handler) obtainItemCards(tx *sqlx.Tx, userID int64, itemIDs []int64, re
 }
 
 // MEMO: "?"の部分を動的に生成するとめちゃくちゃスコア下がったので、ハードコーディングすることを推奨
+func createBulkInsertPlaceholderTen(sliceLen int) string {
+	return strings.Repeat("(?, ?, ?, ?, ?, ?, ?, ?, ?, ?),\n", sliceLen-1) + "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+}
 func createBulkInsertPlaceholderEight(sliceLen int) string {
 	return strings.Repeat("(?, ?, ?, ?, ?, ?, ?, ?),\n", sliceLen-1) + "(?, ?, ?, ?, ?, ?, ?, ?)"
 }
@@ -1573,6 +1576,33 @@ func (h *Handler) receivePresent(c echo.Context) error {
 	}
 	defer tx.Rollback() //nolint:errcheck
 
+	// プレセント更新処理
+	var updateArgs []interface{}
+	for _, p := range obtainPresent {
+		p := p
+		if p.DeletedAt != nil {
+			return errorResponse(c, http.StatusInternalServerError, fmt.Errorf("received present"))
+		}
+		updateArgs = append(updateArgs, p.ID)
+		updateArgs = append(updateArgs, p.UserID)
+		updateArgs = append(updateArgs, p.SentAt)
+		updateArgs = append(updateArgs, p.ItemType)
+		updateArgs = append(updateArgs, p.ItemID)
+		updateArgs = append(updateArgs, p.Amount)
+		updateArgs = append(updateArgs, p.PresentMessage)
+		updateArgs = append(updateArgs, requestAt)
+		updateArgs = append(updateArgs, requestAt)
+		updateArgs = append(updateArgs, requestAt)
+	}
+	if len(updateArgs) > 0 {
+		q := "INSERT INTO `user_presents` (id, user_id, sent_at, item_type, item_id, amount, present_message, created_at, updated_at, deleted_at) VALUES " + createBulkInsertPlaceholderTen(len(updateArgs)/10) + " ON DUPLICATE KEY UPDATE `deleted_at` = VALUES(`deleted_at`), `updated_at` = VALUES(`updated_at`)"
+		_, err = tx.Exec(q, updateArgs...)
+		if err != nil {
+			c.Logger().Error(err)
+			return c.NoContent(http.StatusInternalServerError)
+		}
+	}
+
 	// 配布処理
 	var sumCoin int64
 	var cardIds []int64
@@ -1585,11 +1615,11 @@ func (h *Handler) receivePresent(c echo.Context) error {
 		obtainPresent[i].UpdatedAt = requestAt
 		obtainPresent[i].DeletedAt = &requestAt
 		v := obtainPresent[i]
-		query = "UPDATE user_presents SET deleted_at=?, updated_at=? WHERE id=?"
-		_, err := tx.Exec(query, requestAt, requestAt, v.ID)
-		if err != nil {
-			return errorResponse(c, http.StatusInternalServerError, err)
-		}
+		// query = "UPDATE user_presents SET deleted_at=?, updated_at=? WHERE id=?"
+		// _, err := tx.Exec(query, requestAt, requestAt, v.ID)
+		// if err != nil {
+		// 	return errorResponse(c, http.StatusInternalServerError, err)
+		// }
 
 		if v.ItemType == 1 {
 			sumCoin += int64(v.Amount)
