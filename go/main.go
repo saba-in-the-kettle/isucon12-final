@@ -689,6 +689,59 @@ func (h *Handler) obtainItemCard(tx *sqlx.Tx, userID int64, itemID int64, itemTy
 	return card, nil, nil, nil, nil, false
 }
 
+func (h *Handler) obtainItemCards(tx *sqlx.Tx, userID int64, itemIDs []int64, requestAt int64) error {
+	if len(itemIDs) == 0 {
+		return nil
+	}
+
+	query := "SELECT im.id, im.amount_per_sec  FROM item_masters as im WHERE id IN (?) AND item_type=?"
+
+	q, a, err := sqlx.In(query, itemIDs, 2)
+	fmt.Println(q)
+	if err != nil {
+		return err
+	}
+	fmt.Println(a)
+
+	var itemMasters []ItemMaster
+
+	err = tx.Select(&itemMasters, q, a...)
+	if err != nil {
+		return err
+	}
+
+	var args []interface{}
+	for _, item := range itemMasters {
+		cID, err := h.generateID()
+		if err != nil {
+			return err
+		}
+		args = append(args, cID)
+		args = append(args, userID)
+		args = append(args, item.ID)
+		args = append(args, item.AmountPerSec)
+		args = append(args, 1)
+		args = append(args, 0)
+		args = append(args, requestAt)
+		args = append(args, requestAt)
+	}
+
+	if len(args) == 0 {
+		return nil
+	}
+
+	query = "INSERT INTO user_cards(id, user_id, card_id, amount_per_sec, level, total_exp, created_at, updated_at) VALUES\n" + createBulkInsertPlaceholderEight(len(itemMasters))
+	if _, err := tx.Exec(query, args...); err != nil {
+		return err
+	}
+	return nil
+}
+
+// MEMO: "?"の部分を動的に生成するとめちゃくちゃスコア下がったので、ハードコーディングすることを推奨
+func createBulkInsertPlaceholderEight(sliceLen int) string {
+	return strings.Repeat("(?, ?, ?, ?, ?, ?, ?, ?),\n", sliceLen-1) + "(?, ?, ?, ?, ?, ?, ?, ?)"
+}
+
 func (h *Handler) obtainItemCoin(tx *sqlx.Tx, userID int64, obtainAmount int64) ([]int64, []*UserCard, []*UserItem, error, bool) {
 	user := new(User)
 	query := "SELECT * FROM users WHERE id=?"
@@ -1420,6 +1473,7 @@ func (h *Handler) receivePresent(c echo.Context) error {
 
 	// 配布処理
 	var sumCoin int64
+	var cardIds []int64
 	for i := range obtainPresent {
 		if obtainPresent[i].DeletedAt != nil {
 			return errorResponse(c, http.StatusInternalServerError, fmt.Errorf("received present"))
@@ -1436,6 +1490,8 @@ func (h *Handler) receivePresent(c echo.Context) error {
 
 		if v.ItemType == 1 {
 			sumCoin += int64(v.Amount)
+		} else if v.ItemType == 2 {
+			cardIds = append(cardIds, v.ItemID)
 		} else {
 			_, _, _, err = h.obtainItem(tx, v.UserID, v.ItemID, v.ItemType, int64(v.Amount), requestAt)
 			if err != nil {
@@ -1451,6 +1507,17 @@ func (h *Handler) receivePresent(c echo.Context) error {
 	}
 
 	err, _ = h.obtainItemCoins(tx, userID, sumCoin)
+	if err != nil {
+		if err == ErrUserNotFound || err == ErrItemNotFound {
+			return errorResponse(c, http.StatusNotFound, err)
+		}
+		if err == ErrInvalidItemType {
+			return errorResponse(c, http.StatusBadRequest, err)
+		}
+		return errorResponse(c, http.StatusInternalServerError, err)
+	}
+
+	err = h.obtainItemCards(tx, userID, cardIds, requestAt)
 	if err != nil {
 		if err == ErrUserNotFound || err == ErrItemNotFound {
 			return errorResponse(c, http.StatusNotFound, err)
