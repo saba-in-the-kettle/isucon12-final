@@ -232,7 +232,7 @@ func (h *Handler) adminUpdateMaster(c echo.Context) error {
 	if err != nil {
 		return errorResponse(c, http.StatusInternalServerError, err)
 	}
-	defer tx.Rollback() //nolint:errcheck
+	defer tx2.Rollback() //nolint:errcheck
 
 	eg := errgroup.Group{}
 	eg.Go(func() error {
