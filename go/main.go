@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"sort"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -66,6 +67,7 @@ func bothInit() {
 	versionMasterCache.Flush()
 	userSessionsCache.Flush()
 	banCache.Flush()
+	presentCache.item = map[string][]UserPresent{}
 }
 
 func main() {
@@ -595,6 +597,8 @@ func (h *Handler) obtainPresent(tx *sqlx.Tx, userID int64, requestAt int64) ([]*
 			obtainPresents = append(obtainPresents, up)
 
 			args = append(args, up.ID, up.UserID, up.SentAt, up.ItemType, up.ItemID, up.Amount, up.PresentMessage, up.CreatedAt, up.UpdatedAt)
+			presentCache.Append(strconv.FormatInt(up.UserID, 10), *up)
+
 			count += 1
 		}
 
@@ -1552,6 +1556,7 @@ func (h *Handler) drawGacha(c echo.Context) error {
 			args = append(args, present.ID, present.UserID, present.SentAt, present.ItemType, present.ItemID, present.Amount, present.PresentMessage, present.CreatedAt, present.UpdatedAt)
 			count += 1
 			presents = append(presents, present)
+			presentCache.Append(strconv.FormatInt(present.UserID, 10), *present)
 		}
 
 		if count >= 1 {
@@ -1588,6 +1593,8 @@ type DrawGachaResponse struct {
 	Presents []*UserPresent `json:"presents"`
 }
 
+var presentCache = NewSliceCache[string, UserPresent]()
+
 // listPresent プレゼント一覧
 // GET /user/{userID}/present/index/{n}
 func (h *Handler) listPresent(c echo.Context) error {
@@ -1607,13 +1614,40 @@ func (h *Handler) listPresent(c echo.Context) error {
 	db := h.getDB(userID)
 	offset := PresentCountPerPage * (n - 1)
 	presentList := []*UserPresent{}
-	query := `
-	SELECT * FROM user_presents 
-	WHERE user_id = ? AND deleted_at IS NULL
-	ORDER BY created_at DESC, id
-	LIMIT ? OFFSET ?`
-	if err = db.Select(&presentList, query, userID, PresentCountPerPage+1, offset); err != nil {
-		return errorResponse(c, http.StatusInternalServerError, err)
+	var presentCount int
+	presents := presentCache.Get(strconv.FormatInt(userID, 10))
+
+	if len(presents) > 0 {
+		sort.Slice(presents, func(i, j int) bool {
+			if presents[i].CreatedAt == presents[j].CreatedAt {
+				return presents[i].ID < presents[j].ID
+			}
+			return presents[i].CreatedAt > presents[j].CreatedAt
+		})
+
+		if offset+PresentCountPerPage < len(presents) {
+			for _, i := range presents[offset : offset+PresentCountPerPage] {
+				presentList = append(presentList, &i)
+			}
+		} else if offset < len(presents) {
+			for _, i := range presents[offset:] {
+				presentList = append(presentList, &i)
+			}
+		}
+		presentCount = len(presents)
+	} else {
+		query := `
+		SELECT * FROM user_presents 
+		WHERE user_id = ? AND deleted_at IS NULL
+		ORDER BY created_at DESC, id
+		LIMIT ? OFFSET ?`
+		if err = db.Select(&presentList, query, userID, PresentCountPerPage, offset); err != nil {
+			return errorResponse(c, http.StatusInternalServerError, err)
+		}
+
+		if err = db.Get(&presentCount, "SELECT COUNT(*) FROM user_presents WHERE user_id = ? AND deleted_at IS NULL", userID); err != nil {
+			return errorResponse(c, http.StatusInternalServerError, err)
+		}
 	}
 
 	isNext := false
@@ -1705,6 +1739,8 @@ func (h *Handler) receivePresent(c echo.Context) error {
 		updateArgs = append(updateArgs, p.CreatedAt)
 		updateArgs = append(updateArgs, requestAt)
 		updateArgs = append(updateArgs, requestAt)
+
+		presentCache.Append(strconv.FormatInt(p.UserID, 10), *p)
 	}
 	if len(updateArgs) > 0 {
 		q := "INSERT INTO `user_presents` (id, user_id, sent_at, item_type, item_id, amount, present_message, created_at, updated_at, deleted_at) VALUES " + createBulkInsertPlaceholderTen(len(updateArgs)/10) + " ON DUPLICATE KEY UPDATE `deleted_at` = VALUES(`deleted_at`), `updated_at` = VALUES(`updated_at`)"
@@ -1713,6 +1749,7 @@ func (h *Handler) receivePresent(c echo.Context) error {
 			c.Logger().Error(err)
 			return c.NoContent(http.StatusInternalServerError)
 		}
+
 	}
 
 	// 配布処理
