@@ -697,11 +697,9 @@ func (h *Handler) obtainItemCards(tx *sqlx.Tx, userID int64, itemIDs []int64, re
 	query := "SELECT im.id, im.amount_per_sec  FROM item_masters as im WHERE id IN (?) AND item_type=?"
 
 	q, a, err := sqlx.In(query, itemIDs, 2)
-	fmt.Println(q)
 	if err != nil {
 		return err
 	}
-	fmt.Println(a)
 
 	var itemMasters []ItemMaster
 
