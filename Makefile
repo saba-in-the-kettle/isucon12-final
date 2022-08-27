@@ -36,7 +36,7 @@ deploy-app: build
 # 当日ファイル名をいじる
 .PHONY: deploy-sql
 deploy-sql:
-	@ for s in s1 s2 s3; do\
+	@ for s in s1 s2 s3 s4 s5; do\
 		$(START_ECHO);\
 		scp sql/3_schema_exclude_user_presents.sql $$s:~/webapp/sql/3_schema_exclude_user_presents.sql;\
 		scp sql/6_id_generator_init.sql $$s:~/webapp/sql/6_id_generator_init.sql;\
