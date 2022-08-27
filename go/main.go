@@ -676,6 +676,24 @@ func (h *Handler) obtainItemCoin(tx *sqlx.Tx, userID int64, obtainAmount int64) 
 	return nil, nil, nil, nil, false
 }
 
+func (h *Handler) obtainItemCoins(tx *sqlx.Tx, userID int64, obtainAmount int64) (error, bool) {
+	user := new(User)
+	query := "SELECT * FROM users WHERE id=?"
+	if err := tx.Get(user, query, userID); err != nil {
+		if err == sql.ErrNoRows {
+			return ErrUserNotFound, true
+		}
+		return err, true
+	}
+
+	query = "UPDATE users SET isu_coin=? WHERE id=?"
+	totalCoin := user.IsuCoin + obtainAmount
+	if _, err := tx.Exec(query, totalCoin, user.ID); err != nil {
+		return err, true
+	}
+	return nil, false
+}
+
 // initialize 初期化処理
 // POST /initialize
 func initialize(c echo.Context) error {
@@ -1371,6 +1389,7 @@ func (h *Handler) receivePresent(c echo.Context) error {
 	defer tx.Rollback() //nolint:errcheck
 
 	// 配布処理
+	var sumCoin int64
 	for i := range obtainPresent {
 		if obtainPresent[i].DeletedAt != nil {
 			return errorResponse(c, http.StatusInternalServerError, fmt.Errorf("received present"))
@@ -1385,17 +1404,31 @@ func (h *Handler) receivePresent(c echo.Context) error {
 			return errorResponse(c, http.StatusInternalServerError, err)
 		}
 
-		// TODO(p1ass): この処理何？
-		_, _, _, err = h.obtainItem(tx, v.UserID, v.ItemID, v.ItemType, int64(v.Amount), requestAt)
-		if err != nil {
-			if err == ErrUserNotFound || err == ErrItemNotFound {
-				return errorResponse(c, http.StatusNotFound, err)
+		if v.ItemType == 1 {
+			sumCoin += int64(v.Amount)
+		} else {
+			_, _, _, err = h.obtainItem(tx, v.UserID, v.ItemID, v.ItemType, int64(v.Amount), requestAt)
+			if err != nil {
+				if err == ErrUserNotFound || err == ErrItemNotFound {
+					return errorResponse(c, http.StatusNotFound, err)
+				}
+				if err == ErrInvalidItemType {
+					return errorResponse(c, http.StatusBadRequest, err)
+				}
+				return errorResponse(c, http.StatusInternalServerError, err)
 			}
-			if err == ErrInvalidItemType {
-				return errorResponse(c, http.StatusBadRequest, err)
-			}
-			return errorResponse(c, http.StatusInternalServerError, err)
 		}
+	}
+
+	err, _ = h.obtainItemCoins(tx, userID, sumCoin)
+	if err != nil {
+		if err == ErrUserNotFound || err == ErrItemNotFound {
+			return errorResponse(c, http.StatusNotFound, err)
+		}
+		if err == ErrInvalidItemType {
+			return errorResponse(c, http.StatusBadRequest, err)
+		}
+		return errorResponse(c, http.StatusInternalServerError, err)
 	}
 
 	err = tx.Commit()
