@@ -83,6 +83,10 @@ CREATE TABLE `login_bonus_masters` (
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
+create index login_bonus_masters_start_at_end_at_index
+    on login_bonus_masters (start_at asc, end_at desc);
+
+
 CREATE TABLE `login_bonus_reward_masters` (
   `id` bigint NOT NULL,
   `login_bonus_id` bigint NOT NULL comment 'ログインボーナスID',

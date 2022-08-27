@@ -312,9 +312,9 @@ func (h *Handler) checkOneTimeToken(token string, tokenType int, requestAt int64
 
 // checkViewerID
 func (h *Handler) checkViewerID(userID int64, viewerID string) error {
-	query := "SELECT * FROM user_devices WHERE user_id=? AND platform_id=?"
-	device := new(UserDevice)
-	if err := h.getDB(userID).Get(device, query, userID, viewerID); err != nil {
+	query := "SELECT 1 FROM user_devices WHERE user_id=? AND platform_id=?"
+	var got int
+	if err := h.getDB(userID).Get(&got, query, userID, viewerID); err != nil {
 		if err == sql.ErrNoRows {
 			return ErrUserDeviceNotFound
 		}
@@ -326,9 +326,9 @@ func (h *Handler) checkViewerID(userID int64, viewerID string) error {
 
 // checkBan
 func (h *Handler) checkBan(userID int64) (bool, error) {
-	banUser := new(UserBan)
-	query := "SELECT * FROM user_bans WHERE user_id=?"
-	if err := h.getDB(userID).Get(banUser, query, userID); err != nil {
+	var got int
+	query := "SELECT 1 FROM user_bans WHERE user_id=?"
+	if err := h.getDB(userID).Get(&got, query, userID); err != nil {
 		if err == sql.ErrNoRows {
 			return false, nil
 		}
@@ -404,9 +404,9 @@ func (h *Handler) obtainLoginBonus(tx *sqlx.Tx, userID int64, requestAt int64) (
 	}
 
 	sendLoginBonuses := make([]*UserLoginBonus, 0)
+	var args []interface{}
 
 	for _, bonus := range loginBonuses {
-		initBonus := false
 		// ボーナスの進捗取得
 		userBonus := new(UserLoginBonus)
 		query = "SELECT * FROM user_login_bonuses WHERE user_id=? AND login_bonus_id=?"
@@ -414,7 +414,6 @@ func (h *Handler) obtainLoginBonus(tx *sqlx.Tx, userID int64, requestAt int64) (
 			if err != sql.ErrNoRows {
 				return nil, err
 			}
-			initBonus = true
 
 			ubID, err := h.generateID()
 			if err != nil {
@@ -460,20 +459,23 @@ func (h *Handler) obtainLoginBonus(tx *sqlx.Tx, userID int64, requestAt int64) (
 			return nil, err
 		}
 
-		// 進捗の保存
-		if initBonus {
-			query = "INSERT INTO user_login_bonuses(id, user_id, login_bonus_id, last_reward_sequence, loop_count, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)"
-			if _, err = tx.Exec(query, userBonus.ID, userBonus.UserID, userBonus.LoginBonusID, userBonus.LastRewardSequence, userBonus.LoopCount, userBonus.CreatedAt, userBonus.UpdatedAt); err != nil {
-				return nil, err
-			}
-		} else {
-			query = "UPDATE user_login_bonuses SET last_reward_sequence=?, loop_count=?, updated_at=? WHERE id=?"
-			if _, err = tx.Exec(query, userBonus.LastRewardSequence, userBonus.LoopCount, userBonus.UpdatedAt, userBonus.ID); err != nil {
-				return nil, err
-			}
-		}
+		args = append(args, userBonus.ID)
+		args = append(args, userBonus.UserID)
+		args = append(args, userBonus.LoginBonusID)
+		args = append(args, userBonus.LastRewardSequence)
+		args = append(args, userBonus.LoopCount)
+		args = append(args, userBonus.CreatedAt)
+		args = append(args, userBonus.UpdatedAt)
 
 		sendLoginBonuses = append(sendLoginBonuses, userBonus)
+	}
+
+	// 進捗の保存
+	query = "INSERT INTO user_login_bonuses(id, user_id, login_bonus_id, last_reward_sequence, loop_count, created_at, updated_at) VALUES " +
+		createBulkInsertPlaceholderSeven(len(args)/7) +
+		" ON DUPLICATE KEY UPDATE `last_reward_sequence` = +VALUES(`last_reward_sequence`), `loop_count` = VALUES(`loop_count`), `updated_at` = VALUES(`updated_at`)"
+	if _, err := tx.Exec(query, args...); err != nil {
+		return nil, err
 	}
 
 	return sendLoginBonuses, nil
