@@ -22,6 +22,7 @@ import (
 	"github.com/kaz/pprotein/integration/echov4"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
+	gommonlog "github.com/labstack/gommon/log"
 	"github.com/pkg/errors"
 	"golang.org/x/sync/errgroup"
 )
@@ -76,6 +77,8 @@ func main() {
 	// e.Use(middleware.Logger())
 	e.Use(middleware.Recover())
 	echov4.EnableDebugHandler(e)
+
+	e.Logger.SetLevel(gommonlog.OFF)
 	e.Use(middleware.CORSWithConfig(middleware.CORSConfig{
 		AllowOrigins: []string{"*"},
 		AllowMethods: []string{http.MethodGet, http.MethodPost},
