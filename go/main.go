@@ -1334,7 +1334,7 @@ func (h *Handler) listGacha(c echo.Context) error {
 
 	db := h.getDB(userID)
 	gachaMasterList := []*GachaMaster{}
-	query := "SELECT * FROM gacha_masters WHERE start_at <= ? AND end_at >= ? ORDER BY display_order ASC"
+	query := "SELECT * FROM gacha_masters FORCE INDEX (gacha_masters_start_at_end_at_display_order_index) WHERE start_at <= ? AND end_at >= ? ORDER BY display_order ASC"
 	err = db.Select(&gachaMasterList, query, requestAt, requestAt)
 	if err != nil {
 		return errorResponse(c, http.StatusInternalServerError, err)

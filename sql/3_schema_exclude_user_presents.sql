@@ -154,7 +154,7 @@ CREATE TABLE `gacha_masters` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
 create index gacha_masters_start_at_end_at_display_order_index
-    on gacha_masters (start_at asc, end_at desc, display_order asc);
+    on gacha_masters (start_at desc, end_at asc, display_order asc);
 
 
 
