@@ -312,9 +312,9 @@ func (h *Handler) checkOneTimeToken(token string, tokenType int, requestAt int64
 
 // checkViewerID
 func (h *Handler) checkViewerID(userID int64, viewerID string) error {
-	query := "SELECT * FROM user_devices WHERE user_id=? AND platform_id=?"
-	device := new(UserDevice)
-	if err := h.getDB(userID).Get(device, query, userID, viewerID); err != nil {
+	query := "SELECT 1 FROM user_devices WHERE user_id=? AND platform_id=?"
+	var got int
+	if err := h.getDB(userID).Get(&got, query, userID, viewerID); err != nil {
 		if err == sql.ErrNoRows {
 			return ErrUserDeviceNotFound
 		}
@@ -326,9 +326,9 @@ func (h *Handler) checkViewerID(userID int64, viewerID string) error {
 
 // checkBan
 func (h *Handler) checkBan(userID int64) (bool, error) {
-	banUser := new(UserBan)
-	query := "SELECT * FROM user_bans WHERE user_id=?"
-	if err := h.getDB(userID).Get(banUser, query, userID); err != nil {
+	var got int
+	query := "SELECT 1 FROM user_bans WHERE user_id=?"
+	if err := h.getDB(userID).Get(&got, query, userID); err != nil {
 		if err == sql.ErrNoRows {
 			return false, nil
 		}
