@@ -15,14 +15,14 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/kaz/pprotein/integration/echov4"
-
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
+	"github.com/kaz/pprotein/integration/echov4"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 	"github.com/pkg/errors"
+	"golang.org/x/sync/errgroup"
 )
 
 var (
@@ -53,7 +53,8 @@ var uniqueIdBase int64 = time.Now().Unix() % (3600 * 24 * 3)
 var uniqueIdCount int64 = 0
 
 type Handler struct {
-	DB *sqlx.DB
+	DB  *sqlx.DB
+	DB2 *sqlx.DB
 }
 
 func main() {
@@ -71,16 +72,23 @@ func main() {
 	}))
 
 	// connect db
-	dbx, err := connectDB(false)
+	dbx, err := connectDB(1, false)
 	if err != nil {
 		e.Logger.Fatalf("failed to connect to db: %v", err)
 	}
 	defer dbx.Close()
 
+	dbx2, err := connectDB(2, false)
+	if err != nil {
+		e.Logger.Fatalf("failed to connect to db: %v", err)
+	}
+	defer dbx2.Close()
+
 	// setting server
 	e.Server.Addr = fmt.Sprintf(":%v", "8080")
 	h := &Handler{
-		DB: dbx,
+		DB:  dbx,
+		DB2: dbx2,
 	}
 
 	// e.Use(middleware.CORS())
@@ -119,12 +127,22 @@ func main() {
 	e.Logger.Error(e.StartServer(e.Server))
 }
 
-func connectDB(batch bool) (*sqlx.DB, error) {
+func connectDB(dbIdx int, batch bool) (*sqlx.DB, error) {
+	var dbHostEnvVarName string
+	switch dbIdx {
+	case 1:
+		dbHostEnvVarName = "ISUCON_DB_HOST"
+	case 2:
+		dbHostEnvVarName = "ISUCON_DB_HOST2"
+	default:
+		return nil, fmt.Errorf("invalid db index")
+	}
+
 	dsn := fmt.Sprintf(
 		"%s:%s@tcp(%s:%s)/%s?charset=utf8mb4&parseTime=true&loc=%s&multiStatements=%t",
 		getEnv("ISUCON_DB_USER", "isucon"),
 		getEnv("ISUCON_DB_PASSWORD", "isucon"),
-		getEnv("ISUCON_DB_HOST", "127.0.0.1"),
+		getEnv(dbHostEnvVarName, "127.0.0.1"),
 		getEnv("ISUCON_DB_PORT", "3306"),
 		getEnv("ISUCON_DB_NAME", "isucon"),
 		"Asia%2FTokyo",
@@ -655,16 +673,34 @@ func (h *Handler) obtainItem(tx *sqlx.Tx, userID, itemID int64, itemType int, ob
 // initialize 初期化処理
 // POST /initialize
 func initialize(c echo.Context) error {
-	dbx, err := connectDB(true)
+	dbx, err := connectDB(1, true)
 	if err != nil {
 		return errorResponse(c, http.StatusInternalServerError, err)
 	}
 	defer dbx.Close()
 
+	dbx2, err := connectDB(2, true)
+	if err != nil {
+		return errorResponse(c, http.StatusInternalServerError, err)
+	}
+	defer dbx2.Close()
+
 	var isS1 = os.Getenv("ISUCON_SERVER") == "s1"
 
 	if isS1 {
-		_, err = http.DefaultClient.Post("http://133.152.6.154:8080/initialize", "", nil)
+		eg := errgroup.Group{}
+		for _, ip := range []string{"133.152.6.154", "133.152.6.155"} {
+			eg.Go(func() error {
+				_, err = http.DefaultClient.Post(fmt.Sprintf("http://%s:8080/initialize", ip), "", nil)
+				return err
+			})
+		}
+		err = eg.Wait()
+		if err != nil {
+			return fmt.Errorf("initialize collect: %w", err)
+		}
+
+		_, err = http.DefaultClient.Get("http://133.152.6.153:9000/api/group/collect")
 		if err != nil {
 			return fmt.Errorf("initialize collect: %w", err)
 		}
@@ -673,11 +709,6 @@ func initialize(c echo.Context) error {
 		if err != nil {
 			c.Logger().Errorf("Failed to initialize %s: %v", string(out), err)
 			return errorResponse(c, http.StatusInternalServerError, err)
-		}
-
-		_, err = http.DefaultClient.Get("http://133.152.6.153:9000/api/group/collect")
-		if err != nil {
-			return fmt.Errorf("initialize collect: %w", err)
 		}
 	}
 	return successResponse(c, &InitializeResponse{
@@ -833,6 +864,11 @@ func (h *Handler) createUser(c echo.Context) error {
 	}
 	query = "INSERT INTO user_sessions(id, user_id, session_id, created_at, updated_at, expired_at) VALUES (?, ?, ?, ?, ?, ?)"
 	if _, err = tx.Exec(query, sess.ID, sess.UserID, sess.SessionID, sess.CreatedAt, sess.UpdatedAt, sess.ExpiredAt); err != nil {
+		return errorResponse(c, http.StatusInternalServerError, err)
+	}
+
+	err = tx.Commit()
+	if err != nil {
 		return errorResponse(c, http.StatusInternalServerError, err)
 	}
 
@@ -1344,7 +1380,12 @@ func (h *Handler) receivePresent(c echo.Context) error {
 	if err != nil {
 		return errorResponse(c, http.StatusInternalServerError, err)
 	}
-	defer tx.Rollback() //nolint:errcheck
+	tx2, err := h.DB.Beginx()
+	if err != nil {
+		return errorResponse(c, http.StatusInternalServerError, err)
+	}
+	defer tx.Rollback()  //nolint:errcheck
+	defer tx2.Rollback() //nolint:errcheck
 
 	// 配布処理
 	for i := range obtainPresent {
@@ -1356,7 +1397,7 @@ func (h *Handler) receivePresent(c echo.Context) error {
 		obtainPresent[i].DeletedAt = &requestAt
 		v := obtainPresent[i]
 		query = "UPDATE user_presents SET deleted_at=?, updated_at=? WHERE id=?"
-		_, err := tx.Exec(query, requestAt, requestAt, v.ID)
+		_, err := tx2.Exec(query, requestAt, requestAt, v.ID)
 		if err != nil {
 			return errorResponse(c, http.StatusInternalServerError, err)
 		}
@@ -1375,6 +1416,10 @@ func (h *Handler) receivePresent(c echo.Context) error {
 	}
 
 	err = tx.Commit()
+	if err != nil {
+		return errorResponse(c, http.StatusInternalServerError, err)
+	}
+	err = tx2.Commit()
 	if err != nil {
 		return errorResponse(c, http.StatusInternalServerError, err)
 	}
