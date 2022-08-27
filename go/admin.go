@@ -684,6 +684,7 @@ func (h *Handler) adminBanUser(c echo.Context) error {
 	if _, err = db.Exec(query, banID, userID, requestAt, requestAt, requestAt); err != nil {
 		return errorResponse(c, http.StatusInternalServerError, err)
 	}
+	banCache.Set(strconv.FormatInt(userID, 10), true)
 
 	return successResponse(c, &AdminBanUserResponse{
 		User: user,
