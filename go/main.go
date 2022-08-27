@@ -525,36 +525,48 @@ func (h *Handler) obtainPresent(tx *sqlx.Tx, userID int64, requestAt int64) ([]*
 		}
 	}
 
-	// TODO: N+1
-	for _, np := range normalPresents {
-		if _, ok := presentIDToReceived[np.ID]; ok {
-			continue
+	{
+		createBulkInsertPlaceholder := func(sliceLen int) string {
+			return strings.Repeat("(?, ?, ?, ?, ?, ?),\n", sliceLen-1) + "(?, ?, ?, ?, ?, ?)"
 		}
 
-		// historyに入れる
-		phID, err := h.generateID()
-		if err != nil {
-			return nil, err
+		var args []interface{}
+		count := 0
+		for _, np := range normalPresents {
+			if _, ok := presentIDToReceived[np.ID]; ok {
+				continue
+			}
+
+			// historyに入れる
+			phID, err := h.generateID()
+			if err != nil {
+				return nil, err
+			}
+			history := &UserPresentAllReceivedHistory{
+				ID:           phID,
+				UserID:       userID,
+				PresentAllID: np.ID,
+				ReceivedAt:   requestAt,
+				CreatedAt:    requestAt,
+				UpdatedAt:    requestAt,
+			}
+			args = append(args, history.ID,
+				history.UserID,
+				history.PresentAllID,
+				history.ReceivedAt,
+				history.CreatedAt,
+				history.UpdatedAt)
+			count += 1
 		}
-		history := &UserPresentAllReceivedHistory{
-			ID:           phID,
-			UserID:       userID,
-			PresentAllID: np.ID,
-			ReceivedAt:   requestAt,
-			CreatedAt:    requestAt,
-			UpdatedAt:    requestAt,
-		}
-		query = "INSERT INTO user_present_all_received_history(id, user_id, present_all_id, received_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)"
-		if _, err := tx.Exec(
-			query,
-			history.ID,
-			history.UserID,
-			history.PresentAllID,
-			history.ReceivedAt,
-			history.CreatedAt,
-			history.UpdatedAt,
-		); err != nil {
-			return nil, err
+
+		if count >= 1 {
+			query = "INSERT INTO user_present_all_received_history(id, user_id, present_all_id, received_at, created_at, updated_at) VALUES " + createBulkInsertPlaceholder(count)
+			if _, err := tx.Exec(
+				query,
+				args...,
+			); err != nil {
+				return nil, err
+			}
 		}
 	}
 
