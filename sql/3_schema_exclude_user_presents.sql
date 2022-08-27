@@ -20,6 +20,8 @@ DROP TABLE IF EXISTS `item_masters`;
 DROP TABLE IF EXISTS `version_masters`;
 DROP TABLE IF EXISTS `admin_users`;
 
+
+
 CREATE TABLE `users` (
   `id` bigint NOT NULL,
   `isu_coin` bigint NOT NULL default 0 comment '所持ISU-COIN',
@@ -144,6 +146,11 @@ CREATE TABLE `gacha_masters` (
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
+create index gacha_masters_start_at_end_at_display_order_index
+    on gacha_masters (start_at asc, end_at desc, display_order asc);
+
+
+
 CREATE TABLE `gacha_item_masters` (
   `id` bigint NOT NULL,
   `gacha_id` bigint NOT NULL comment 'ガチャ台のID',
@@ -155,6 +162,10 @@ CREATE TABLE `gacha_item_masters` (
   PRIMARY KEY (`id`),
   UNIQUE uniq_item_id (`gacha_id`, `item_type`, `item_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
+
+create index gacha_item_masters_gacha_id_id_idx
+    on gacha_item_masters (gacha_id asc, id desc);
+
 
 CREATE TABLE `user_items` (
   `id` bigint NOT NULL,
@@ -168,6 +179,11 @@ CREATE TABLE `user_items` (
   PRIMARY KEY (`id`),
   INDEX userid_idx (`user_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
+
+create index user_items_item_id_item_type_user_id_index
+    on user_items (item_id, item_type, user_id);
+
+
 
 CREATE TABLE `user_cards` (
   `id` bigint NOT NULL,
@@ -200,6 +216,9 @@ CREATE TABLE `item_masters` (
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
+create index item_masters_id_item_type_index
+    on item_masters (id, item_type);
+
 
 /*　マスタバージョンを管理するテーブル */
 CREATE TABLE `version_masters` (
@@ -208,6 +227,11 @@ CREATE TABLE `version_masters` (
   `master_version` varchar(128) NOT NULL comment 'マスタバージョン',
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
+
+create index version_masters_status_index
+    on version_masters (status);
+
+
 
 CREATE TABLE `user_sessions` (
   `id` bigint NOT NULL,

@@ -25,7 +25,7 @@ build:
 
 .PHONY: deploy-app
 deploy-app: build
-	@ for s in s1; do\
+	@ for s in s1 s2 s3; do\
 		$(START_ECHO);\
 		ssh $$s "sudo systemctl daemon-reload";\
 		ssh $$s "sudo systemctl stop $(SERVICE_NAME)";\
@@ -36,7 +36,7 @@ deploy-app: build
 # 当日ファイル名をいじる
 .PHONY: deploy-sql
 deploy-sql:
-	@ for s in s1; do\
+	@ for s in s1 s2 s3; do\
 		$(START_ECHO);\
 		scp sql/3_schema_exclude_user_presents.sql $$s:~/webapp/sql/3_schema_exclude_user_presents.sql;\
 		scp sql/6_id_generator_init.sql $$s:~/webapp/sql/6_id_generator_init.sql;\
@@ -59,6 +59,6 @@ deploy: deploy-config deploy-sql deploy-app
 .PHONY: port-forward
 port-forward:
 	lsof -t -i :19999,29999,39999 | xargs kill
-	ssh -N s1 -L 19999:localhost:19999 -L 9000:localhost:9000 -L 3306:localhost:3306 -L 8080:localhost:80 &
-	ssh -N s2 -L 29999:localhost:19999 &
+	ssh -N s1 -L 19999:localhost:19999 -L 9000:localhost:9000 -L 8080:localhost:80 &
+	ssh -N s2 -L 29999:localhost:19999 -L 3306:localhost:3306  &
 	ssh -N s3 -L 39999:localhost:19999 &

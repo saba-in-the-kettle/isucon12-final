@@ -454,18 +454,39 @@ func (h *Handler) obtainPresent(tx *sqlx.Tx, userID int64, requestAt int64) ([]*
 		return nil, err
 	}
 
-	// 全員プレゼント取得情報更新
 	obtainPresents := make([]*UserPresent, 0)
-	for _, np := range normalPresents {
-		received := new(UserPresentAllReceivedHistory)
-		query = "SELECT * FROM user_present_all_received_history WHERE user_id=? AND present_all_id=?"
-		err := tx.Get(received, query, userID, np.ID)
-		if err == nil {
-			// プレゼント配布済
-			continue
+
+	presentIDToReceived := make(map[int64]*UserPresentAllReceivedHistory)
+	{
+		normalPresentIDs := make([]int64, 0, len(normalPresents))
+		for _, np := range normalPresents {
+			normalPresentIDs = append(normalPresentIDs, np.ID)
 		}
-		if err != sql.ErrNoRows {
+
+		query, args, err := sqlx.In("SELECT * FROM user_present_all_received_history WHERE user_id=? AND present_all_id IN (?)", userID, normalPresentIDs)
+		if err != nil {
 			return nil, err
+		}
+		received := make([]*UserPresentAllReceivedHistory, 0)
+		err = tx.Select(&received, query, args...)
+		if err != nil {
+			if err != sql.ErrNoRows {
+				return nil, err
+			}
+			log.Println(err)
+			return obtainPresents, nil
+		}
+
+		for _, r := range received {
+			presentIDToReceived[r.PresentAllID] = r
+		}
+	}
+
+	// 全員プレゼント取得情報更新
+	// TODO: N+1
+	for _, np := range normalPresents {
+		if _, ok := presentIDToReceived[np.ID]; ok {
+			continue
 		}
 
 		// user present boxに入れる
@@ -1340,6 +1361,7 @@ func (h *Handler) receivePresent(c echo.Context) error {
 			return errorResponse(c, http.StatusInternalServerError, err)
 		}
 
+		// TODO(p1ass): この処理何？
 		_, _, _, err = h.obtainItem(tx, v.UserID, v.ItemID, v.ItemType, int64(v.Amount), requestAt)
 		if err != nil {
 			if err == ErrUserNotFound || err == ErrItemNotFound {
