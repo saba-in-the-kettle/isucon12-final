@@ -658,6 +658,93 @@ func (h *Handler) obtainItemKyokaSozai(tx *sqlx.Tx, userID int64, itemID int64, 
 	return uitem, nil, nil, nil, nil, false
 }
 
+type obtainKyokasozaiDTO struct {
+	itemID       int64
+	obtainAmount int64
+}
+
+func (h *Handler) obtainItemKyokaSozais(tx *sqlx.Tx, userID int64, kyokasozais []obtainKyokasozaiDTO, requestAt int64) error {
+	if len(kyokasozais) == 0 {
+		return nil
+	}
+
+	var itemIDs []int64
+	for _, item := range kyokasozais {
+		itemIDs = append(itemIDs, item.itemID)
+	}
+
+	query := "SELECT im.id, im.amount_per_sec, im.item_type  FROM item_masters as im WHERE id IN (?) AND item_type IN (?)"
+
+	q, a, err := sqlx.In(query, itemIDs, []int{3, 4})
+	if err != nil {
+		return err
+	}
+
+	var itemMasters []ItemMaster
+
+	err = tx.Select(&itemMasters, q, a...)
+	if err != nil {
+		return err
+	}
+
+	query = "SELECT * FROM user_items WHERE user_id= ? AND item_id IN (?)"
+
+	q, a, err = sqlx.In(query, userID, []int{3, 4})
+	if err != nil {
+		return err
+	}
+
+	var userItems []UserItem
+
+	err = tx.Select(&userItems, q, a...)
+	if err != nil {
+		return err
+	}
+
+	if len(userItems) == 0 {
+		return nil
+	}
+
+	userItemMap := map[int64]UserItem{}
+	for _, ui := range userItems {
+		userItemMap[ui.ItemID] = ui
+	}
+
+	amountMap := map[int64]int64{}
+	for _, s := range kyokasozais {
+		amountMap[s.itemID] = s.obtainAmount
+	}
+
+	var newArgs []interface{}
+	for _, item := range itemMasters {
+
+		cID, err := h.generateID()
+		if err != nil {
+			return err
+		}
+		newArgs = append(newArgs, cID)
+		newArgs = append(newArgs, userID)
+		newArgs = append(newArgs, item.ID)
+		newArgs = append(newArgs, item.ItemType)
+		newArgs = append(newArgs, amountMap[item.ID])
+		newArgs = append(newArgs, 1)
+		newArgs = append(newArgs, 0)
+		newArgs = append(newArgs, requestAt)
+		newArgs = append(newArgs, requestAt)
+	}
+
+	if len(newArgs) == 0 {
+		return nil
+	} else {
+		query = "INSERT INTO user_items(id, user_id, item_id, item_type, amount, created_at, updated_at) VALUES\n" + createBulkInsertPlaceholderSeven(len(itemMasters)) + " ON DUPLICATE KEY UPDATE `amount` = `amount` +VALUES(`amount`), `updated_at` = VALUES(`amount`)"
+		if _, err := tx.Exec(query, newArgs...); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
 func (h *Handler) obtainItemCard(tx *sqlx.Tx, userID int64, itemID int64, itemType int, requestAt int64) (*UserCard, []int64, []*UserCard, []*UserItem, error, bool) {
 	query := "SELECT * FROM item_masters WHERE id=? AND item_type=?"
 	item := new(ItemMaster)
@@ -738,6 +825,9 @@ func (h *Handler) obtainItemCards(tx *sqlx.Tx, userID int64, itemIDs []int64, re
 // MEMO: "?"の部分を動的に生成するとめちゃくちゃスコア下がったので、ハードコーディングすることを推奨
 func createBulkInsertPlaceholderEight(sliceLen int) string {
 	return strings.Repeat("(?, ?, ?, ?, ?, ?, ?, ?),\n", sliceLen-1) + "(?, ?, ?, ?, ?, ?, ?, ?)"
+}
+func createBulkInsertPlaceholderSeven(sliceLen int) string {
+	return strings.Repeat("(?, ?, ?, ?, ?, ?, ?),\n", sliceLen-1) + "(?, ?, ?, ?, ?, ?, ?)"
 }
 
 func (h *Handler) obtainItemCoin(tx *sqlx.Tx, userID int64, obtainAmount int64) ([]int64, []*UserCard, []*UserItem, error, bool) {
@@ -1472,6 +1562,7 @@ func (h *Handler) receivePresent(c echo.Context) error {
 	// 配布処理
 	var sumCoin int64
 	var cardIds []int64
+	var dto []obtainKyokasozaiDTO
 	for i := range obtainPresent {
 		if obtainPresent[i].DeletedAt != nil {
 			return errorResponse(c, http.StatusInternalServerError, fmt.Errorf("received present"))
@@ -1491,16 +1582,10 @@ func (h *Handler) receivePresent(c echo.Context) error {
 		} else if v.ItemType == 2 {
 			cardIds = append(cardIds, v.ItemID)
 		} else {
-			_, _, _, err = h.obtainItem(tx, v.UserID, v.ItemID, v.ItemType, int64(v.Amount), requestAt)
-			if err != nil {
-				if err == ErrUserNotFound || err == ErrItemNotFound {
-					return errorResponse(c, http.StatusNotFound, err)
-				}
-				if err == ErrInvalidItemType {
-					return errorResponse(c, http.StatusBadRequest, err)
-				}
-				return errorResponse(c, http.StatusInternalServerError, err)
-			}
+			dto = append(dto, obtainKyokasozaiDTO{
+				itemID:       v.ItemID,
+				obtainAmount: int64(v.Amount),
+			})
 		}
 	}
 
@@ -1516,6 +1601,17 @@ func (h *Handler) receivePresent(c echo.Context) error {
 	}
 
 	err = h.obtainItemCards(tx, userID, cardIds, requestAt)
+	if err != nil {
+		if err == ErrUserNotFound || err == ErrItemNotFound {
+			return errorResponse(c, http.StatusNotFound, err)
+		}
+		if err == ErrInvalidItemType {
+			return errorResponse(c, http.StatusBadRequest, err)
+		}
+		return errorResponse(c, http.StatusInternalServerError, err)
+	}
+
+	err = h.obtainItemKyokaSozais(tx, userID, dto, requestAt)
 	if err != nil {
 		if err == ErrUserNotFound || err == ErrItemNotFound {
 			return errorResponse(c, http.StatusNotFound, err)
