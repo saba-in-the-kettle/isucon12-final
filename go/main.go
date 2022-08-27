@@ -48,14 +48,17 @@ const (
 	PresentCountPerPage int = 100
 
 	SQLDirectory string = "../sql/"
+	DB_COUNT            = 4
 )
 
 var uniqueIdBase int64 = time.Now().Unix() % (3600 * 24 * 3)
 var uniqueIdCount int64 = 0
 
 type Handler struct {
-	db  *sqlx.DB
 	db2 *sqlx.DB
+	db3 *sqlx.DB
+	db4 *sqlx.DB
+	db5 *sqlx.DB
 }
 
 func bothInit() {
@@ -77,24 +80,38 @@ func main() {
 		AllowHeaders: []string{"Content-Type", "x-master-version", "x-session"},
 	}))
 
-	// connect db
-	dbx, err := connectDB(1, false)
+	// connect db2
+	dbx2, err := connectDB(1, false)
 	if err != nil {
-		e.Logger.Fatalf("failed to connect to db: %v", err)
-	}
-	defer dbx.Close()
-
-	dbx2, err := connectDB(2, false)
-	if err != nil {
-		e.Logger.Fatalf("failed to connect to db: %v", err)
+		e.Logger.Fatalf("failed to connect to db2: %v", err)
 	}
 	defer dbx2.Close()
+
+	dbx3, err := connectDB(2, false)
+	if err != nil {
+		e.Logger.Fatalf("failed to connect to db3: %v", err)
+	}
+	defer dbx3.Close()
+
+	dbx4, err := connectDB(3, false)
+	if err != nil {
+		e.Logger.Fatalf("failed to connect to db4: %v", err)
+	}
+	defer dbx4.Close()
+
+	dbx5, err := connectDB(4, false)
+	if err != nil {
+		e.Logger.Fatalf("failed to connect to db5: %v", err)
+	}
+	defer dbx5.Close()
 
 	// setting server
 	e.Server.Addr = fmt.Sprintf(":%v", "8080")
 	h := &Handler{
-		db:  dbx,
 		db2: dbx2,
+		db3: dbx3,
+		db4: dbx4,
+		db5: dbx5,
 	}
 
 	// e.Use(middleware.CORS())
@@ -140,8 +157,12 @@ func connectDB(dbIdx int, batch bool) (*sqlx.DB, error) {
 		dbHostEnvVarName = "ISUCON_DB_HOST"
 	case 2:
 		dbHostEnvVarName = "ISUCON_DB_HOST2"
+	case 3:
+		dbHostEnvVarName = "ISUCON_DB_HOST3"
+	case 4:
+		dbHostEnvVarName = "ISUCON_DB_HOST4"
 	default:
-		return nil, fmt.Errorf("invalid db index")
+		return nil, fmt.Errorf("invalid db2 index")
 	}
 
 	dsn := fmt.Sprintf(
@@ -200,7 +221,7 @@ func (h *Handler) apiMiddleware(next echo.HandlerFunc) echo.HandlerFunc {
 		masterVersion := new(VersionMaster)
 		if mv, ok := versionMasterCache.Get(versionMasterKey); !ok {
 			query := "SELECT * FROM version_masters WHERE status=1"
-			if err := h.db.Get(masterVersion, query); err != nil {
+			if err := h.db2.Get(masterVersion, query); err != nil {
 				if err == sql.ErrNoRows {
 					return errorResponse(c, http.StatusNotFound, fmt.Errorf("active master version is not found"))
 				}
@@ -918,11 +939,23 @@ func initialize(c echo.Context) error {
 	}
 	defer dbx2.Close()
 
+	dbx3, err := connectDB(3, true)
+	if err != nil {
+		return errorResponse(c, http.StatusInternalServerError, err)
+	}
+	defer dbx3.Close()
+
+	dbx4, err := connectDB(4, true)
+	if err != nil {
+		return errorResponse(c, http.StatusInternalServerError, err)
+	}
+	defer dbx4.Close()
+
 	var isS1 = os.Getenv("ISUCON_SERVER") == "s1"
 
 	if isS1 {
 		eg := errgroup.Group{}
-		for _, ip := range []string{"133.152.6.154", "133.152.6.155"} {
+		for _, ip := range []string{"133.152.6.154", "133.152.6.155", "133.152.6.156", "133.152.6.157"} {
 			ip := ip
 			eg.Go(func() error {
 				resp, err := http.DefaultClient.Post(fmt.Sprintf("http://%s:80/initialize", ip), "", nil)
@@ -1275,9 +1308,10 @@ func (h *Handler) listGacha(c echo.Context) error {
 		return errorResponse(c, http.StatusInternalServerError, ErrGetRequestTime)
 	}
 
+	db := h.getDB(userID)
 	gachaMasterList := []*GachaMaster{}
 	query := "SELECT * FROM gacha_masters WHERE start_at <= ? AND end_at >= ? ORDER BY display_order ASC"
-	err = h.db.Select(&gachaMasterList, query, requestAt, requestAt)
+	err = db.Select(&gachaMasterList, query, requestAt, requestAt)
 	if err != nil {
 		return errorResponse(c, http.StatusInternalServerError, err)
 	}
@@ -1293,7 +1327,7 @@ func (h *Handler) listGacha(c echo.Context) error {
 	query = "SELECT * FROM gacha_item_masters WHERE gacha_id=? ORDER BY id ASC"
 	for _, v := range gachaMasterList {
 		var gachaItem []*GachaItemMaster
-		err = h.db.Select(&gachaItem, query, v.ID)
+		err = db.Select(&gachaItem, query, v.ID)
 		if err != nil {
 			return errorResponse(c, http.StatusInternalServerError, err)
 		}
@@ -1310,7 +1344,7 @@ func (h *Handler) listGacha(c echo.Context) error {
 
 	// genearte one time token
 	query = "UPDATE user_one_time_tokens SET deleted_at=? WHERE user_id=? AND deleted_at IS NULL"
-	if _, err = h.getDB(userID).Exec(query, requestAt, userID); err != nil {
+	if _, err = db.Exec(query, requestAt, userID); err != nil {
 		return errorResponse(c, http.StatusInternalServerError, err)
 	}
 	tID, err := h.generateID()
@@ -2301,17 +2335,29 @@ func noContentResponse(c echo.Context, status int) error {
 }
 
 func (h *Handler) getDB(userId int64) *sqlx.DB {
-	if userId%2 == 0 {
-		return h.db
+	switch userId % DB_COUNT {
+	case 0:
+		return h.db2
+	case 1:
+		return h.db3
+	case 2:
+		return h.db4
+	default:
+		return h.db5
 	}
-	return h.db2
 }
 
 func (h *Handler) getDBFromSessIDOrToken(sessID string) *sqlx.DB {
-	if sessID[len(sessID)-1] == '0' {
-		return h.db
+	switch sessID[len(sessID)-1] {
+	case '0':
+		return h.db2
+	case '1':
+		return h.db3
+	case '2':
+		return h.db4
+	default:
+		return h.db5
 	}
-	return h.db2
 }
 
 // generateID uniqueなIDを生成する
@@ -2322,10 +2368,8 @@ func (h *Handler) generateID() (int64, error) {
 
 func (h *Handler) generateUserID() (int64, error) {
 	newId := uniqueIdBase + atomic.AddInt64(&uniqueIdCount, 1)*1000000
-	newId *= 2
-	if rand.Float32() < 0.5 {
-		newId++
-	}
+	newId *= DB_COUNT
+	newId += rand.Int63n(DB_COUNT)
 	return uniqueIdBase + newId*1000000, nil
 }
 
@@ -2337,12 +2381,7 @@ func generateUUID(userID int64) (string, error) {
 	}
 	idStr := id.String()
 
-	if userID%2 == 0 {
-		idStr += "0"
-	} else {
-		idStr += "1"
-	}
-
+	idStr += strconv.FormatInt(userID%DB_COUNT, 10)
 	return idStr, nil
 }
 
