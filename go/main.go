@@ -779,6 +779,7 @@ func (h *Handler) obtainItemCoins(tx *sqlx.Tx, userID int64, obtainAmount int64)
 // initialize 初期化処理
 // POST /initialize
 func initialize(c echo.Context) error {
+	c.Logger().Error("initializing....")
 	dbx, err := connectDB(true)
 	if err != nil {
 		return errorResponse(c, http.StatusInternalServerError, err)
@@ -788,7 +789,7 @@ func initialize(c echo.Context) error {
 	var isS1 = os.Getenv("ISUCON_SERVER") == "s1"
 
 	if isS1 {
-		_, err = http.DefaultClient.Post("http://133.152.6.154:8080/initialize", "", nil)
+		_, err = http.DefaultClient.Post("http://133.152.6.154:80/initialize", "", nil)
 		if err != nil {
 			return fmt.Errorf("initialize collect: %w", err)
 		}
