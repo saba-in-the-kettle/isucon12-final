@@ -909,6 +909,7 @@ func initialize(c echo.Context) error {
 	if isS1 {
 		eg := errgroup.Group{}
 		for _, ip := range []string{"133.152.6.154", "133.152.6.155"} {
+			ip := ip
 			eg.Go(func() error {
 				_, err = http.DefaultClient.Post(fmt.Sprintf("http://%s:80/initialize", ip), "", nil)
 				return err

@@ -564,10 +564,11 @@ func (h *Handler) adminUser(c echo.Context) error {
 	if err != nil {
 		return errorResponse(c, http.StatusBadRequest, err)
 	}
+	db := h.getDB(userID)
 
 	query := "SELECT * FROM users WHERE id=?"
 	user := new(User)
-	if err = h.db2.Get(user, query, userID); err != nil {
+	if err = db.Get(user, query, userID); err != nil {
 		if err == sql.ErrNoRows {
 			return errorResponse(c, http.StatusNotFound, ErrUserNotFound)
 		}
@@ -576,43 +577,43 @@ func (h *Handler) adminUser(c echo.Context) error {
 
 	query = "SELECT * FROM user_devices WHERE user_id=?"
 	devices := make([]*UserDevice, 0)
-	if err = h.db2.Select(&devices, query, userID); err != nil {
+	if err = db.Select(&devices, query, userID); err != nil {
 		return errorResponse(c, http.StatusInternalServerError, err)
 	}
 
 	query = "SELECT * FROM user_cards WHERE user_id=?"
 	cards := make([]*UserCard, 0)
-	if err = h.db2.Select(&cards, query, userID); err != nil {
+	if err = db.Select(&cards, query, userID); err != nil {
 		return errorResponse(c, http.StatusInternalServerError, err)
 	}
 
 	query = "SELECT * FROM user_decks WHERE user_id=?"
 	decks := make([]*UserDeck, 0)
-	if err = h.db2.Select(&decks, query, userID); err != nil {
+	if err = db.Select(&decks, query, userID); err != nil {
 		return errorResponse(c, http.StatusInternalServerError, err)
 	}
 
 	query = "SELECT * FROM user_items WHERE user_id=?"
 	items := make([]*UserItem, 0)
-	if err = h.db2.Select(&items, query, userID); err != nil {
+	if err = db.Select(&items, query, userID); err != nil {
 		return errorResponse(c, http.StatusInternalServerError, err)
 	}
 
 	query = "SELECT * FROM user_login_bonuses WHERE user_id=?"
 	loginBonuses := make([]*UserLoginBonus, 0)
-	if err = h.db2.Select(&loginBonuses, query, userID); err != nil {
+	if err = db.Select(&loginBonuses, query, userID); err != nil {
 		return errorResponse(c, http.StatusInternalServerError, err)
 	}
 
 	query = "SELECT * FROM user_presents WHERE user_id=?"
 	presents := make([]*UserPresent, 0)
-	if err = h.db2.Select(&presents, query, userID); err != nil {
+	if err = db.Select(&presents, query, userID); err != nil {
 		return errorResponse(c, http.StatusInternalServerError, err)
 	}
 
 	query = "SELECT * FROM user_present_all_received_history WHERE user_id=?"
 	presentHistory := make([]*UserPresentAllReceivedHistory, 0)
-	if err = h.db2.Select(&presentHistory, query, userID); err != nil {
+	if err = db.Select(&presentHistory, query, userID); err != nil {
 		return errorResponse(c, http.StatusInternalServerError, err)
 	}
 
