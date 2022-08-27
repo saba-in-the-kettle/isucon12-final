@@ -4,8 +4,8 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"github.com/kaz/pprotein/integration/echov4"
 	"io"
+	"log"
 	"math"
 	"math/rand"
 	"net/http"
@@ -13,6 +13,8 @@ import (
 	"os/exec"
 	"strconv"
 	"time"
+
+	"github.com/kaz/pprotein/integration/echov4"
 
 	"github.com/go-sql-driver/mysql"
 	"github.com/google/uuid"
@@ -127,6 +129,14 @@ func connectDB(batch bool) (*sqlx.DB, error) {
 	dbx, err := sqlx.Open("mysql", dsn)
 	if err != nil {
 		return nil, err
+	}
+	for {
+		err := dbx.Ping()
+		if err == nil {
+			break
+		}
+		log.Print(err)
+		time.Sleep(1 * time.Second)
 	}
 	return dbx, nil
 }
