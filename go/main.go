@@ -259,11 +259,8 @@ func (h *Handler) checkSessionMiddleware(next echo.HandlerFunc) echo.HandlerFunc
 		}
 
 		userSession := new(Session)
-		if s, ok := userSessionsCache.Get(strconv.FormatInt(userID, 10)); ok {
+		if s, ok := userSessionsCache.Get(strconv.FormatInt(userID, 10)); ok && s.SessionID == sessID {
 			userSession = &s
-			if userSession.SessionID != sessID {
-				return errorResponse(c, http.StatusUnauthorized, ErrUnauthorized)
-			}
 		} else {
 			query := "SELECT * FROM user_sessions WHERE session_id=? AND deleted_at IS NULL"
 			if err := h.getDBFromSessIDOrToken(sessID).Get(userSession, query, sessID); err != nil {
