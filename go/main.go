@@ -67,6 +67,7 @@ func bothInit() {
 	versionMasterCache.Flush()
 	userSessionsCache.Flush()
 	banCache.Flush()
+	presentCache.item = map[string][]UserPresent{}
 }
 
 func main() {
@@ -1623,6 +1624,9 @@ func (h *Handler) listPresent(c echo.Context) error {
 
 	if len(presents) > 0 {
 		sort.Slice(presents, func(i, j int) bool {
+			if presents[i].CreatedAt == presents[j].CreatedAt {
+				return presents[i].ID < presents[j].ID
+			}
 			return presents[i].CreatedAt > presents[j].CreatedAt
 		})
 
