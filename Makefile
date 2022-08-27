@@ -25,7 +25,7 @@ build:
 
 .PHONY: deploy-app
 deploy-app: build
-	@ for s in s1 s2 s3; do\
+	@ for s in s1 s2 s3 s4 s5; do\
 		$(START_ECHO);\
 		ssh $$s "sudo systemctl daemon-reload";\
 		ssh $$s "sudo systemctl stop $(SERVICE_NAME)";\
