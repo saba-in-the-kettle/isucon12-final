@@ -188,6 +188,8 @@ func (h *Handler) apiMiddleware(next echo.HandlerFunc) echo.HandlerFunc {
 				}
 				return errorResponse(c, http.StatusInternalServerError, err)
 			}
+
+			versionMasterCache.Set(versionMasterKey, *masterVersion)
 		} else {
 			masterVersion = &mv
 		}
