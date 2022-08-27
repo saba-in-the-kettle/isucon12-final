@@ -134,6 +134,9 @@ CREATE TABLE `user_present_all_received_history` (
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
+create index user_present_all_received_history_user_id_present_all_id
+    on user_present_all_received_history (user_id asc, present_all_id asc);
+
 /* ガチャマスタ */
 
 CREATE TABLE `gacha_masters` (
