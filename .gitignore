@@ -7,3 +7,5 @@ php
 ruby
 rust
 go/isuconquest
+.idea/
+.vscode/
