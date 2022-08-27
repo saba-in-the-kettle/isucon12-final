@@ -4,7 +4,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"github.com/kaz/pprotein/integration/echov4"
 	"io"
 	"math"
 	"math/rand"
@@ -13,6 +12,8 @@ import (
 	"os/exec"
 	"strconv"
 	"time"
+
+	"github.com/kaz/pprotein/integration/echov4"
 
 	"github.com/go-sql-driver/mysql"
 	"github.com/google/uuid"
@@ -626,17 +627,25 @@ func initialize(c echo.Context) error {
 	}
 	defer dbx.Close()
 
-	out, err := exec.Command("/bin/sh", "-c", SQLDirectory+"init.sh").CombinedOutput()
-	if err != nil {
-		c.Logger().Errorf("Failed to initialize %s: %v", string(out), err)
-		return errorResponse(c, http.StatusInternalServerError, err)
-	}
+	var isS1 = os.Getenv("ISUCON_SERVER") == "s1"
 
-	_, err = http.DefaultClient.Get("http://133.152.6.153:9000/api/group/collect")
-	if err != nil {
-		return fmt.Errorf("initialize collect: %w", err)
-	}
+	if isS1 {
+		_, err = http.DefaultClient.Post("http://133.152.6.154:8080/initialize", "", nil)
+		if err != nil {
+			return fmt.Errorf("initialize collect: %w", err)
+		}
+	} else {
+		out, err := exec.Command("/bin/sh", "-c", SQLDirectory+"init.sh").CombinedOutput()
+		if err != nil {
+			c.Logger().Errorf("Failed to initialize %s: %v", string(out), err)
+			return errorResponse(c, http.StatusInternalServerError, err)
+		}
 
+		_, err = http.DefaultClient.Get("http://133.152.6.153:9000/api/group/collect")
+		if err != nil {
+			return fmt.Errorf("initialize collect: %w", err)
+		}
+	}
 	return successResponse(c, &InitializeResponse{
 		Language: "go",
 	})
