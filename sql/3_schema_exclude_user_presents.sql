@@ -248,6 +248,11 @@ CREATE TABLE `user_sessions` (
   UNIQUE uniq_session_id (`user_id`, `session_id`, `deleted_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
+create unique index user_sessions_session_id_deleted_at_uindex
+    on user_sessions (session_id, deleted_at);
+
+
+
 /* 更新処理について利用するone time tokenの管理 */
 CREATE TABLE `user_one_time_tokens` (
   `id` bigint NOT NULL,
