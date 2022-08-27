@@ -189,6 +189,10 @@ func connectDB(dbIdx int, batch bool) (*sqlx.DB, error) {
 		log.Print(err)
 		time.Sleep(1 * time.Second)
 	}
+
+	dbx.SetMaxOpenConns(200)
+	dbx.SetMaxIdleConns(200)
+
 	return dbx, nil
 }
 
