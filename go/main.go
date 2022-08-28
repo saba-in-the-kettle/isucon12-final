@@ -770,7 +770,7 @@ func (h *Handler) obtainItemKyokaSozais(tx *sqlx.Tx, userID int64, kyokasozais [
 
 	query = "SELECT * FROM user_items WHERE user_id= ? AND item_id IN (?)"
 
-	q, a, err = sqlx.In(query, userID, []int{3, 4})
+	q, a, err = sqlx.In(query, userID, itemIDs)
 	if err != nil {
 		return err
 	}
@@ -780,10 +780,6 @@ func (h *Handler) obtainItemKyokaSozais(tx *sqlx.Tx, userID int64, kyokasozais [
 	err = tx.Select(&userItems, q, a...)
 	if err != nil {
 		return err
-	}
-
-	if len(userItems) == 0 {
-		return nil
 	}
 
 	userItemMap := map[int64]UserItem{}
@@ -803,13 +799,17 @@ func (h *Handler) obtainItemKyokaSozais(tx *sqlx.Tx, userID int64, kyokasozais [
 		if err != nil {
 			return err
 		}
+
+		ui, ok := userItemMap[item.ID]
+		if ok {
+			cID = ui.ID
+		}
+
 		newArgs = append(newArgs, cID)
 		newArgs = append(newArgs, userID)
 		newArgs = append(newArgs, item.ID)
 		newArgs = append(newArgs, item.ItemType)
 		newArgs = append(newArgs, amountMap[item.ID])
-		newArgs = append(newArgs, 1)
-		newArgs = append(newArgs, 0)
 		newArgs = append(newArgs, requestAt)
 		newArgs = append(newArgs, requestAt)
 	}
@@ -994,6 +994,11 @@ func initialize(c echo.Context) error {
 			})
 		}
 		err = eg.Wait()
+		if err != nil {
+			return fmt.Errorf("initialize collect: %w", err)
+		}
+
+		_, err = http.DefaultClient.Get("http://133.152.6.153:9000/api/group/collect")
 		if err != nil {
 			return fmt.Errorf("initialize collect: %w", err)
 		}
