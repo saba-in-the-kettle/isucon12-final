@@ -13,6 +13,7 @@ DROP TABLE IF EXISTS `user_login_bonuses`;
 DROP TABLE IF EXISTS `present_all_masters`;
 DROP TABLE IF EXISTS `user_present_all_received_history`;
 DROP TABLE IF EXISTS `user_presents`;
+DROP TABLE IF EXISTS `user_presents_deleted`;
 DROP TABLE IF EXISTS `gacha_masters`;
 DROP TABLE IF EXISTS `gacha_item_masters`;
 DROP TABLE IF EXISTS `user_items`;
@@ -148,12 +149,27 @@ CREATE TABLE `user_presents` (
   `created_at` bigint NOT NULL,
   `updated_at`bigint NOT NULL,
   `deleted_at` bigint default NULL,
-  PRIMARY KEY (`id`)
+  PRIMARY KEY (`id`),
+  INDEX userid_idx (`user_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
 create index user_presents_user_id_deleted_at_created_at_id_index
-    on user_presents (user_id asc, deleted_at asc, created_at desc, id asc);
+    on user_presents (user_id asc, created_at desc, id asc);
 
+CREATE TABLE `user_presents_deleted` (
+     `id` bigint NOT NULL,
+     `user_id` bigint NOT NULL comment 'ユーザID',
+     `sent_at` bigint NOT NULL comment 'プレゼント送付日時',
+     `item_type` int(1) NOT NULL comment 'アイテム種別',
+     `item_id` int NOT NULL comment 'アイテムID',
+     `amount` int NOT NULL comment 'アイテム数',
+     `present_message` varchar(255) comment 'プレゼントメッセージ',
+     `created_at` bigint NOT NULL,
+     `updated_at`bigint NOT NULL,
+     `deleted_at` bigint default NULL,
+     PRIMARY KEY (`id`),
+     INDEX userid_idx (`user_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
 /* ガチャマスタ */
 

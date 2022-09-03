@@ -1,4 +1,4 @@
-# make deploy -j 10 で並列でデプロイされる
+# make deploy -j 15 で並列でデプロイされる
 
 # ↓↓↓当日いじる↓↓↓
 # アプリケーション
@@ -33,10 +33,7 @@ deploy-app:
 
 deploy-app-%:
 	@ $(START_ECHO);\
-	ssh $* "sudo systemctl daemon-reload";\
-	ssh $* "sudo systemctl stop $(SERVICE_NAME)";\
-	scp $(BUILD_DIR)/$(BIN_NAME) $*:$(SERVER_BINARY_DIR);\
-	ssh $* "sudo systemctl start $(SERVICE_NAME)";\
+	ssh $* "~isucon/webapp/sql/setup/setup.sh";\
 
 # 当日ファイル名をいじる
 .PHONY: deploy-sql
@@ -49,6 +46,7 @@ deploy-sql-%:
 	scp sql/init.sh $*:~/webapp/sql/init.sh;\
 	scp sql/setup/0_setup.sql $*:~/webapp/sql/setup/0_setup.sql;\
 	scp sql/setup/1_schema.sql $*:~/webapp/sql/setup/1_schema.sql;\
+	scp sql/setup/setup.sh $*:~/webapp/sql/setup/setup.sh;\
 
 .PHONY: deploy-config
 deploy-config: deploy-config-s1 deploy-config-s2 deploy-config-s3 deploy-config-s4 deploy-config-s5

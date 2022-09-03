@@ -13,13 +13,12 @@ set -e
 sudo systemctl restart nginx
 sudo systemctl restart mysql
 
-QUERY="CREATE USER IF NOT EXISTS 'isucon'@'%' identified by 'isucon';
-GRANT ALL privileges on *.* to isucon@'%';
-ALTER USER isucon@'%' IDENTIFIED WITH mysql_native_password BY 'isucon';
-flush privileges;
-"
-
-echo "$QUERY" | sudo mysql -uroot
+#QUERY="USE isucon;
+#INSERT INTO user_presents_deleted (id, user_id, sent_at, item_type, item_id, amount, present_message, created_at, updated_at, deleted_at) SELECT * FROM user_presents WHERE deleted_at IS NOT NULL;
+#DELETE FROM user_presents WHERE deleted_at IS NOT NULl;
+#"
+#
+#echo "$QUERY" | sudo mysql -uroot
 
 sudo ufw disable
 sudo service apparmor stop

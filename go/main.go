@@ -1670,7 +1670,7 @@ func (h *Handler) listPresent(c echo.Context) error {
 	presentList := []*UserPresent{}
 	query := `
 	SELECT * FROM user_presents 
-	WHERE user_id = ? AND deleted_at IS NULL
+	WHERE user_id = ?
 	ORDER BY created_at DESC, id
 	LIMIT ? OFFSET ?`
 	if err = db.Select(&presentList, query, userID, PresentCountPerPage+1, offset); err != nil {
@@ -1726,7 +1726,7 @@ func (h *Handler) receivePresent(c echo.Context) error {
 	}
 
 	// user_presentsに入っているが未取得のプレゼント取得
-	query := "SELECT * FROM user_presents WHERE id IN (?) AND deleted_at IS NULL"
+	query := "SELECT * FROM user_presents WHERE id IN (?)"
 	query, params, err := sqlx.In(query, req.PresentIDs)
 	if err != nil {
 		return errorResponse(c, http.StatusBadRequest, err)
@@ -1751,6 +1751,7 @@ func (h *Handler) receivePresent(c echo.Context) error {
 
 	// プレセント更新処理
 	var updateArgs []interface{}
+	var IDs []int64
 	for _, p := range obtainPresent {
 		p := p
 		if p.DeletedAt != nil {
@@ -1766,10 +1767,24 @@ func (h *Handler) receivePresent(c echo.Context) error {
 		updateArgs = append(updateArgs, p.CreatedAt)
 		updateArgs = append(updateArgs, requestAt)
 		updateArgs = append(updateArgs, requestAt)
+
+		IDs = append(IDs, p.ID)
 	}
 	if len(updateArgs) > 0 {
-		q := "INSERT INTO `user_presents` (id, user_id, sent_at, item_type, item_id, amount, present_message, created_at, updated_at, deleted_at) VALUES " + createBulkInsertPlaceholderTen(len(updateArgs)/10) + " ON DUPLICATE KEY UPDATE `deleted_at` = VALUES(`deleted_at`), `updated_at` = VALUES(`updated_at`)"
+		q := "INSERT INTO `user_presents_deleted` (id, user_id, sent_at, item_type, item_id, amount, present_message, created_at, updated_at, deleted_at) VALUES " + createBulkInsertPlaceholderTen(len(updateArgs)/10)
 		_, err = tx.Exec(q, updateArgs...)
+		if err != nil {
+			c.Logger().Error(err)
+			return c.NoContent(http.StatusInternalServerError)
+		}
+
+		q, a, err := sqlx.In("DELETE FROM user_presents WHERE ID IN (?)", IDs)
+		if err != nil {
+			c.Logger().Error(err)
+			return c.NoContent(http.StatusInternalServerError)
+		}
+
+		_, err = tx.Exec(q, a...)
 		if err != nil {
 			c.Logger().Error(err)
 			return c.NoContent(http.StatusInternalServerError)
