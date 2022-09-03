@@ -1771,7 +1771,7 @@ func (h *Handler) receivePresent(c echo.Context) error {
 		IDs = append(IDs, p.ID)
 	}
 	if len(updateArgs) > 0 {
-		q := "INSERT INTO `user_presents_deleted` (id, user_id, sent_at, item_type, item_id, amount, present_message, created_at, updated_at, deleted_at) VALUES " + createBulkInsertPlaceholderTen(len(updateArgs)/10)
+		q := "INSERT INTO `user_presents_deleted` (id, user_id, sent_at, item_type, item_id, amount, present_message, created_at, updated_at, deleted_at) VALUES " + createBulkInsertPlaceholderTen(len(updateArgs)/10) + " ON DUPLICATE KEY UPDATE `deleted_at` = VALUES(`deleted_at`), `updated_at` = VALUES(`updated_at`)"
 		_, err = tx.Exec(q, updateArgs...)
 		if err != nil {
 			c.Logger().Error(err)
