@@ -2,8 +2,8 @@ package main
 
 import (
 	"database/sql"
-	"encoding/json"
 	"fmt"
+	"github.com/goccy/go-json"
 	"io"
 	"log"
 	"math"
@@ -68,6 +68,30 @@ func bothInit() {
 	banCache.Flush()
 }
 
+type goccySerializer struct {
+}
+
+func (d goccySerializer) Serialize(c echo.Context, i interface{}, indent string) error {
+	enc := json.NewEncoder(c.Response())
+	if indent != "" {
+		enc.SetIndent("", indent)
+	}
+	return enc.Encode(i)
+}
+
+// Deserialize reads a JSON from a request body and converts it into an interface.
+func (d goccySerializer) Deserialize(c echo.Context, i interface{}) error {
+	err := json.NewDecoder(c.Request().Body).Decode(i)
+	if ute, ok := err.(*json.UnmarshalTypeError); ok {
+		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Unmarshal type error: expected=%v, got=%v, field=%v, offset=%v", ute.Type, ute.Value, ute.Field, ute.Offset)).SetInternal(err)
+	} else if se, ok := err.(*json.SyntaxError); ok {
+		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Syntax error: offset=%v, error=%v", se.Offset, se.Error())).SetInternal(err)
+	}
+	return err
+}
+
+var _ echo.JSONSerializer = &goccySerializer{}
+
 func main() {
 	bothInit()
 	rand.Seed(time.Now().UnixNano())
@@ -77,6 +101,8 @@ func main() {
 	// e.Use(middleware.Logger())
 	e.Use(middleware.Recover())
 	echov4.EnableDebugHandler(e)
+
+	e.JSONSerializer = &goccySerializer{}
 
 	// e.Logger.SetLevel(gommonlog.OFF)
 	e.Use(middleware.CORSWithConfig(middleware.CORSConfig{
