@@ -2472,7 +2472,7 @@ func (h *Handler) generateUserID() (int64, error) {
 	newId := uniqueIdBase + atomic.AddInt64(&uniqueIdCount, 1)*1000000
 	newId *= DB_COUNT
 	newId += rand.Int63n(DB_COUNT)
-	return uniqueIdBase + newId*1000000, nil
+	return uniqueIdBase + newId, nil
 }
 
 // generateSessionID
