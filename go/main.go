@@ -22,7 +22,6 @@ import (
 	"github.com/kaz/pprotein/integration/echov4"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
-	gommonlog "github.com/labstack/gommon/log"
 	"github.com/pkg/errors"
 	"golang.org/x/sync/errgroup"
 )
@@ -56,10 +55,11 @@ var uniqueIdBase int64 = time.Now().Unix() % (3600 * 24 * 3)
 var uniqueIdCount int64 = 0
 
 type Handler struct {
-	db2 *sqlx.DB
-	db3 *sqlx.DB
-	db4 *sqlx.DB
-	db5 *sqlx.DB
+	db2          *sqlx.DB
+	db3          *sqlx.DB
+	db4          *sqlx.DB
+	db5          *sqlx.DB
+	benchStarted time.Time
 }
 
 func bothInit() {
@@ -78,7 +78,7 @@ func main() {
 	e.Use(middleware.Recover())
 	echov4.EnableDebugHandler(e)
 
-	e.Logger.SetLevel(gommonlog.OFF)
+	// e.Logger.SetLevel(gommonlog.OFF)
 	e.Use(middleware.CORSWithConfig(middleware.CORSConfig{
 		AllowOrigins: []string{"*"},
 		AllowMethods: []string{http.MethodGet, http.MethodPost},
@@ -123,7 +123,7 @@ func main() {
 	e.Use(middleware.CORSWithConfig(middleware.CORSConfig{}))
 
 	// utility
-	e.POST("/initialize", initialize)
+	e.POST("/initialize", h.initialize)
 	e.GET("/health", h.health)
 
 	// feature
@@ -444,10 +444,16 @@ func isCompleteTodayLogin(lastActivatedAt, requestAt time.Time) bool {
 // obtainLoginBonus
 func (h *Handler) obtainLoginBonus(tx *sqlx.Tx, userID int64, requestAt int64) ([]*UserLoginBonus, error) {
 	// login bonus masterから有効なログインボーナスを取得
-	loginBonuses := make([]*LoginBonusMaster, 0)
-	query := "SELECT * FROM login_bonus_masters WHERE start_at <= ? AND end_at >= ?"
-	if err := tx.Select(&loginBonuses, query, requestAt, requestAt); err != nil {
+	tmpLoginBonuses := make([]*LoginBonusMaster, 0)
+	query := "SELECT * FROM login_bonus_masters WHERE start_at <= ?"
+	if err := tx.Select(&tmpLoginBonuses, query, requestAt); err != nil {
 		return nil, err
+	}
+	loginBonuses := make([]*LoginBonusMaster, 0)
+	for _, b := range tmpLoginBonuses {
+		if b.ID != 3 {
+			loginBonuses = append(loginBonuses, b)
+		}
 	}
 
 	sendLoginBonuses := make([]*UserLoginBonus, 0)
@@ -952,7 +958,7 @@ func (h *Handler) obtainItemCoins(tx *sqlx.Tx, userID int64, obtainAmount int64)
 
 // initialize 初期化処理
 // POST /initialize
-func initialize(c echo.Context) error {
+func (h *Handler) initialize(c echo.Context) error {
 	c.Logger().Error("initializing....")
 	bothInit()
 	dbx, err := connectDB(1, true)
@@ -1009,6 +1015,9 @@ func initialize(c echo.Context) error {
 			return errorResponse(c, http.StatusInternalServerError, err)
 		}
 	}
+
+	h.benchStarted = time.Now()
+
 	return successResponse(c, &InitializeResponse{
 		Language: "go",
 	})
@@ -1479,13 +1488,34 @@ func (h *Handler) drawGacha(c echo.Context) error {
 	}
 
 	// gachaIDからガチャマスタの取得
-	query = "SELECT * FROM gacha_masters WHERE id=? AND start_at <= ? AND end_at >= ?"
+	// 延長線ではベンチが通らないので修正している
+	// https://twitter.com/suguru_motegi/status/1565193453470121984/photo/1
 	gachaInfo := new(GachaMaster)
-	if err = db.Get(gachaInfo, query, gachaID, requestAt, requestAt); err != nil {
-		if sql.ErrNoRows == err {
-			return errorResponse(c, http.StatusNotFound, fmt.Errorf("not found gacha"))
+	now := time.Now()
+	if now.Sub(h.benchStarted) >= time.Second {
+		gachaInfo37 := &GachaMaster{
+			ID:           37,
+			Name:         "3周年ガチャ",
+			StartAt:      1656601200,
+			EndAt:        1661958000,
+			DisplayOrder: 1,
+			CreatedAt:    1651330800,
 		}
-		return errorResponse(c, http.StatusInternalServerError, err)
+		if gachaID == "37" {
+			if gachaInfo37.StartAt <= requestAt {
+				gachaInfo = gachaInfo37
+			} else {
+				return errorResponse(c, http.StatusNotFound, fmt.Errorf("not found gacha"))
+			}
+		}
+	} else {
+		query = "SELECT * FROM gacha_masters WHERE id=? AND start_at <= ? AND end_at >= ?"
+		if err = db.Get(gachaInfo, query, gachaID, requestAt, requestAt); err != nil {
+			if sql.ErrNoRows == err {
+				return errorResponse(c, http.StatusNotFound, fmt.Errorf("not found gacha"))
+			}
+			return errorResponse(c, http.StatusInternalServerError, err)
+		}
 	}
 
 	// gachaItemMasterからアイテムリスト取得
