@@ -148,8 +148,7 @@ CREATE TABLE `user_presents` (
   `created_at` bigint NOT NULL,
   `updated_at`bigint NOT NULL,
   `deleted_at` bigint default NULL,
-  PRIMARY KEY (`id`),
-  INDEX userid_idx (`user_id`)
+  PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
 create index user_presents_user_id_deleted_at_created_at_id_index
