@@ -420,24 +420,15 @@ func getRequestTime(c echo.Context) (int64, error) {
 }
 
 // loginProcess ログイン処理
-func (h *Handler) loginProcess(tx *sqlx.Tx, userID int64, requestAt int64) (*User, []*UserLoginBonus, []*UserPresent, error) {
-	user := new(User)
-	query := "SELECT * FROM users WHERE id=?"
-	if err := tx.Get(user, query, userID); err != nil {
-		if err == sql.ErrNoRows {
-			return nil, nil, nil, ErrUserNotFound
-		}
-		return nil, nil, nil, err
-	}
-
+func (h *Handler) loginProcess(tx *sqlx.Tx, user *User, requestAt int64) (*User, []*UserLoginBonus, []*UserPresent, error) {
 	// ログインボーナス処理
-	loginBonuses, err := h.obtainLoginBonus(tx, userID, requestAt)
+	loginBonuses, err := h.obtainLoginBonus(tx, user.ID, requestAt)
 	if err != nil {
 		return nil, nil, nil, err
 	}
 
 	// 全員プレゼント取得
-	allPresents, err := h.obtainPresent(tx, userID, requestAt)
+	allPresents, err := h.obtainPresent(tx, user.ID, requestAt)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -452,8 +443,8 @@ func (h *Handler) loginProcess(tx *sqlx.Tx, userID int64, requestAt int64) (*Use
 	user.UpdatedAt = requestAt
 	user.LastActivatedAt = requestAt
 
-	query = "UPDATE users SET updated_at=?, last_activated_at=? WHERE id=?"
-	if _, err := tx.Exec(query, requestAt, requestAt, userID); err != nil {
+	query := "UPDATE users SET updated_at=?, last_activated_at=? WHERE id=?"
+	if _, err := tx.Exec(query, requestAt, requestAt, user.ID); err != nil {
 		return nil, nil, nil, err
 	}
 
@@ -1168,7 +1159,7 @@ func (h *Handler) createUser(c echo.Context) error {
 	}
 
 	// ログイン処理
-	user, loginBonuses, presents, err := h.loginProcess(tx, user.ID, requestAt)
+	user, loginBonuses, presents, err := h.loginProcess(tx, user, requestAt)
 	if err != nil {
 		if err == ErrUserNotFound || err == ErrItemNotFound || err == ErrLoginBonusRewardNotFound {
 			return errorResponse(c, http.StatusNotFound, err)
@@ -1327,7 +1318,7 @@ func (h *Handler) login(c echo.Context) error {
 	}
 
 	// login process
-	user, loginBonuses, presents, err := h.loginProcess(tx, req.UserID, requestAt)
+	user, loginBonuses, presents, err := h.loginProcess(tx, user, requestAt)
 	if err != nil {
 		if err == ErrUserNotFound || err == ErrItemNotFound || err == ErrLoginBonusRewardNotFound {
 			return errorResponse(c, http.StatusNotFound, err)
@@ -1497,7 +1488,7 @@ func (h *Handler) drawGacha(c echo.Context) error {
 		return errorResponse(c, http.StatusInternalServerError, err)
 	}
 
-	consumedCoin := int64(gachaCount * 1000)
+	consumedCoin := gachaCount * 1000
 
 	// userのisucoinが足りるか
 	user := new(User)
@@ -2565,14 +2556,6 @@ type UserDevice struct {
 	CreatedAt    int64  `json:"createdAt" db:"created_at"`
 	UpdatedAt    int64  `json:"updatedAt" db:"updated_at"`
 	DeletedAt    *int64 `json:"deletedAt,omitempty" db:"deleted_at"`
-}
-
-type UserBan struct {
-	ID        int64  `db:"id"`
-	UserID    int64  `db:"user_id"`
-	CreatedAt int64  `db:"created_at"`
-	UpdatedAt int64  `db:"updated_at"`
-	DeletedAt *int64 `db:"deleted_at"`
 }
 
 type UserCard struct {
