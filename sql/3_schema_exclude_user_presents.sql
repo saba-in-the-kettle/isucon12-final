@@ -70,6 +70,8 @@ CREATE TABLE `user_devices` (
   UNIQUE uniq_platform_id (`platform_id`, `platform_type`, `deleted_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
+create index user_devices_user_id_platform_id_uindex
+    on user_devices (user_id, platform_id);
 
 /* ログインボーナスマスタ */
 
@@ -97,6 +99,11 @@ CREATE TABLE `login_bonus_reward_masters` (
   `created_at` bigint NOT NULL,
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
+
+create index login_bonus_reward_masters_login_bonus_id_reward_sequence_index
+    on login_bonus_reward_masters (login_bonus_id, reward_sequence);
+
+
 
 CREATE TABLE `user_login_bonuses` (
   `id` bigint NOT NULL,
@@ -189,6 +196,9 @@ CREATE TABLE `user_items` (
 
 create index user_items_item_id_item_type_user_id_index
     on user_items (item_id, item_type, user_id);
+
+create index user_items_user_id_item_id_index
+    on user_items (user_id, item_id);
 
 
 

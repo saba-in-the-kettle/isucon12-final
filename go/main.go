@@ -1390,7 +1390,7 @@ func (h *Handler) listGacha(c echo.Context) error {
 
 	// ガチャ排出アイテム取得
 	gachaDataList := make([]*GachaData, 0)
-	query = "SELECT * FROM gacha_item_masters WHERE gacha_id=? ORDER BY id ASC"
+	query = "SELECT * FROM gacha_item_masters FORCE INDEX (`gacha_item_masters_gacha_id_id_idx`) WHERE gacha_id=? ORDER BY id ASC"
 	for _, v := range gachaMasterList {
 		var gachaItem []*GachaItemMaster
 		err = db.Select(&gachaItem, query, v.ID)
@@ -1546,7 +1546,7 @@ func (h *Handler) drawGacha(c echo.Context) error {
 
 	// gachaItemMasterからアイテムリスト取得
 	gachaItemList := make([]*GachaItemMaster, 0)
-	err = db.Select(&gachaItemList, "SELECT * FROM gacha_item_masters WHERE gacha_id=? ORDER BY id ASC", gachaID)
+	err = db.Select(&gachaItemList, "SELECT * FROM gacha_item_masters FORCE INDEX (`gacha_item_masters_gacha_id_id_idx`) WHERE gacha_id=? ORDER BY id ASC", gachaID)
 	if err != nil {
 		return errorResponse(c, http.StatusInternalServerError, err)
 	}
