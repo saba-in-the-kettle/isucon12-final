@@ -33,7 +33,10 @@ deploy-app:
 
 deploy-app-%:
 	@ $(START_ECHO);\
-	ssh $* "~isucon/webapp/sql/setup/setup.sh";\
+	ssh $* "sudo systemctl daemon-reload";\
+	ssh $* "sudo systemctl stop $(SERVICE_NAME)";\
+	scp $(BUILD_DIR)/$(BIN_NAME) $*:$(SERVER_BINARY_DIR);\
+	ssh $* "sudo systemctl start $(SERVICE_NAME)";\
 
 # 当日ファイル名をいじる
 .PHONY: deploy-sql
