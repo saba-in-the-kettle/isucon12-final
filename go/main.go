@@ -494,7 +494,7 @@ func (h *Handler) obtainLoginBonus(tx *sqlx.Tx, userID int64, requestAt int64) (
 	for _, bonus := range loginBonuses {
 		// ボーナスの進捗取得
 		userBonus := new(UserLoginBonus)
-		query = "SELECT * FROM user_login_bonuses WHERE user_id=? AND login_bonus_id=?"
+		query = "SELECT * FROM user_login_bonuses WHERE user_id=? AND login_bonus_id=? LIMIT 1"
 		if err := tx.Get(userBonus, query, userID, bonus.ID); err != nil {
 			if err != sql.ErrNoRows {
 				return nil, err
@@ -531,7 +531,7 @@ func (h *Handler) obtainLoginBonus(tx *sqlx.Tx, userID int64, requestAt int64) (
 
 		// 今回付与するリソース取得
 		rewardItem := new(LoginBonusRewardMaster)
-		query = "SELECT * FROM login_bonus_reward_masters WHERE login_bonus_id=? AND reward_sequence=?"
+		query = "SELECT * FROM login_bonus_reward_masters WHERE login_bonus_id=? AND reward_sequence=? LIMIT 1"
 		if err := tx.Get(rewardItem, query, bonus.ID, userBonus.LastRewardSequence); err != nil {
 			if err == sql.ErrNoRows {
 				return nil, ErrLoginBonusRewardNotFound
