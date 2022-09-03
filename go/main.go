@@ -1511,7 +1511,7 @@ func (h *Handler) drawGacha(c echo.Context) error {
 
 	// userのisucoinが足りるか
 	user := new(User)
-	query := "SELECT * FROM users WHERE id=?"
+	query := "SELECT id,isu_coin FROM users WHERE id=?"
 	db := h.getDB(userID)
 	if err := db.Get(user, query, userID); err != nil {
 		if err == sql.ErrNoRows {
@@ -1545,7 +1545,7 @@ func (h *Handler) drawGacha(c echo.Context) error {
 			}
 		}
 	} else {
-		query = "SELECT * FROM gacha_masters WHERE id=? AND start_at <= ? AND end_at >= ?"
+		query = "SELECT name FROM gacha_masters WHERE id=? AND start_at <= ? AND end_at >= ? LIMIT 1"
 		if err = db.Get(gachaInfo, query, gachaID, requestAt, requestAt); err != nil {
 			if sql.ErrNoRows == err {
 				return errorResponse(c, http.StatusNotFound, fmt.Errorf("not found gacha"))
