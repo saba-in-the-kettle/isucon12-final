@@ -261,7 +261,7 @@ create unique index user_sessions_session_id_deleted_at_uindex
 CREATE TABLE `user_one_time_tokens` (
   `id` bigint NOT NULL,
   `user_id` bigint NOT NULL,
-  `token` varchar(128) NOT NULL,
+  `token` varchar(128) NOT NULL UNIQUE ,
   `token_type` int(2) NOT NULL comment '1:ガチャ用、2:カード強化用',
   `created_at` bigint NOT NULL,
   `updated_at` bigint NOT NULL,
@@ -271,7 +271,7 @@ CREATE TABLE `user_one_time_tokens` (
   UNIQUE uniq_token (`user_id`, `token`, `deleted_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
-create index user_one_time_tokens_token_token_type_deleted_at
+create unique index user_one_time_tokens_token_token_type_deleted_at_uindex
     on user_one_time_tokens (token, token_type, deleted_at);
 
 /* 管理者権限のセッション管理 */
