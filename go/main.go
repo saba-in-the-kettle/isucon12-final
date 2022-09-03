@@ -971,18 +971,8 @@ func (h *Handler) obtainItemCoin(tx *sqlx.Tx, userID int64, obtainAmount int64) 
 }
 
 func (h *Handler) obtainItemCoins(tx *sqlx.Tx, userID int64, obtainAmount int64) (error, bool) {
-	user := new(User)
-	query := "SELECT * FROM users WHERE id=?"
-	if err := tx.Get(user, query, userID); err != nil {
-		if err == sql.ErrNoRows {
-			return ErrUserNotFound, true
-		}
-		return err, true
-	}
-
-	query = "UPDATE users SET isu_coin=? WHERE id=?"
-	totalCoin := user.IsuCoin + obtainAmount
-	if _, err := tx.Exec(query, totalCoin, user.ID); err != nil {
+	query := "UPDATE users SET isu_coin= isu_coin + ? WHERE id=?"
+	if _, err := tx.Exec(query, obtainAmount, userID); err != nil {
 		return err, true
 	}
 	return nil, false
