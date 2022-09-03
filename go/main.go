@@ -1566,12 +1566,8 @@ func (h *Handler) drawGacha(c echo.Context) error {
 
 	// weightの合計値を算出
 	var sum int64
-	err = db.Get(&sum, "SELECT SUM(weight) FROM gacha_item_masters WHERE gacha_id=?", gachaID)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			return errorResponse(c, http.StatusNotFound, err)
-		}
-		return errorResponse(c, http.StatusInternalServerError, err)
+	for _, gi := range gachaItemList {
+		sum += int64(gi.Weight)
 	}
 
 	// random値の導出 & 抽選
