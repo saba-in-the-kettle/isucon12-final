@@ -644,9 +644,9 @@ func (h *Handler) adminUser(c echo.Context) error {
 		return errorResponse(c, http.StatusInternalServerError, err)
 	}
 
-	query = "SELECT * FROM user_presents WHERE user_id=?"
+	query = "SELECT * FROM user_presents WHERE user_id=? UNION ALL SELECT * FROM user_presents_deleted WHERE user_id=?"
 	presents := make([]*UserPresent, 0)
-	if err = db.Select(&presents, query, userID); err != nil {
+	if err = db.Select(&presents, query, userID, userID); err != nil {
 		return errorResponse(c, http.StatusInternalServerError, err)
 	}
 

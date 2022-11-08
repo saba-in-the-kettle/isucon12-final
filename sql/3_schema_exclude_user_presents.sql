@@ -70,6 +70,8 @@ CREATE TABLE `user_devices` (
   UNIQUE uniq_platform_id (`platform_id`, `platform_type`, `deleted_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
+create index user_devices_user_id_platform_id_uindex
+    on user_devices (user_id, platform_id);
 
 /* ログインボーナスマスタ */
 
@@ -97,6 +99,11 @@ CREATE TABLE `login_bonus_reward_masters` (
   `created_at` bigint NOT NULL,
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
+
+create index login_bonus_reward_masters_login_bonus_id_reward_sequence_index
+    on login_bonus_reward_masters (login_bonus_id, reward_sequence);
+
+
 
 CREATE TABLE `user_login_bonuses` (
   `id` bigint NOT NULL,
@@ -190,6 +197,9 @@ CREATE TABLE `user_items` (
 create index user_items_item_id_item_type_user_id_index
     on user_items (item_id, item_type, user_id);
 
+create index user_items_user_id_item_id_index
+    on user_items (user_id, item_id);
+
 
 
 CREATE TABLE `user_cards` (
@@ -261,7 +271,7 @@ create unique index user_sessions_session_id_deleted_at_uindex
 CREATE TABLE `user_one_time_tokens` (
   `id` bigint NOT NULL,
   `user_id` bigint NOT NULL,
-  `token` varchar(128) NOT NULL,
+  `token` varchar(128) NOT NULL UNIQUE ,
   `token_type` int(2) NOT NULL comment '1:ガチャ用、2:カード強化用',
   `created_at` bigint NOT NULL,
   `updated_at` bigint NOT NULL,
@@ -271,7 +281,7 @@ CREATE TABLE `user_one_time_tokens` (
   UNIQUE uniq_token (`user_id`, `token`, `deleted_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
-create index user_one_time_tokens_token_token_type_deleted_at
+create unique index user_one_time_tokens_token_token_type_deleted_at_uindex
     on user_one_time_tokens (token, token_type, deleted_at);
 
 /* 管理者権限のセッション管理 */
